@@ -18,7 +18,9 @@ public class StringReader implements Reader<String> {
     private boolean hasSize;
 
     public ProcessStatus process(ByteBuffer bb) {
-        if(state == DONE || state == ERROR) throw new IllegalStateException();
+        if(state == DONE || state == ERROR) {
+            throw new IllegalStateException();
+        }
         if(stringBuffer.position() == 0 && !hasSize){
             ProcessStatus status = intReader.process(bb);
             if (status == ProcessStatus.REFILL) {
@@ -28,7 +30,9 @@ public class StringReader implements Reader<String> {
             int size = intReader.get();
             intReader.reset();
 
-            if(size < 0 || size > BUFFER_SIZE) return ProcessStatus.ERROR;
+            if(size < 0 || size > BUFFER_SIZE) {
+                return ProcessStatus.ERROR;
+            }
             stringBuffer.limit(size);
             hasSize = true;
         }
@@ -38,8 +42,7 @@ public class StringReader implements Reader<String> {
             int remains = stringBuffer.remaining();
             if(bb.remaining() <= remains){
                 stringBuffer.put(bb);
-            }
-            else {
+            } else {
                 int oldLimit = bb.limit();
                 bb.limit(remains);
                 stringBuffer.put(bb);

@@ -1,10 +1,10 @@
 package fr.umlv.chatos.readers;
 
-import static fr.umlv.chatos.readers.Reader.State.*;
-
 import java.nio.ByteBuffer;
 
 public class MessageReader implements Reader<Message> {
+
+    enum State {DONE,WAITING,ERROR}
 
     private static final int BUFFER_SIZE = 1024;
 
@@ -16,28 +16,34 @@ public class MessageReader implements Reader<Message> {
 
     @Override
     public ProcessStatus process(ByteBuffer bb) {
-        if(state == DONE || state == ERROR) throw new IllegalStateException();
+        if(state == State.DONE || state == State.ERROR) throw new IllegalStateException();
 
         if(login == null) {
             var loginReaderStatus = stringReader.process(bb);
-            if (loginReaderStatus != ProcessStatus.DONE) return loginReaderStatus;
+            if (loginReaderStatus != ProcessStatus.DONE) {
+                return loginReaderStatus;
+            }
             this.login = stringReader.get();
             stringReader.reset();
         }
 
         var messageReaderStatus = stringReader.process(bb);
-        if(messageReaderStatus != ProcessStatus.DONE) return messageReaderStatus;
+        if(messageReaderStatus != ProcessStatus.DONE) {
+            return messageReaderStatus;
+        }
         String value = stringReader.get();
         stringReader.reset();
 
         message = new Message(login, value);
-        state = DONE;
+        state = State.DONE;
         return ProcessStatus.DONE;
     }
 
     @Override
     public Message get() {
-        if(state != DONE) throw new IllegalStateException();
+        if(state != State.DONE) {
+            throw new IllegalStateException();
+        }
         return message;
     }
 
@@ -46,6 +52,6 @@ public class MessageReader implements Reader<Message> {
         message = null;
         login = null;
         stringReader.reset();
-        state = WAITING;
+        state = State.WAITING;
     }
 }

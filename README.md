@@ -181,7 +181,7 @@ OPCodes (Operation Codes) describe the operation to be performed.
 Each OPCode is represented in byte. Parentheses specifies the sender of the code, where S is for Server and C for client.
 ChatOS protocol uses the following OPCodes:
 1. Initialization (C)
-2. Succesful operation (S)
+2. Successful operation (S)
 3. Failed Operation (S)
 4. Global message (C)
 5. Global message (S)
@@ -191,6 +191,7 @@ ChatOS protocol uses the following OPCodes:
 9. Private connection request (S)
 10. Private connection response (C)
 11. Private connection establishment (S)
+12. Private connection establishment (C)
 
 ___
 
