@@ -178,7 +178,7 @@ ___
 
 ### 7. OPCodes
 OPCodes (Operation Codes) describe the operation to be performed.
-Each OPCode is represented in byte. Parentheses specifies the sender of the code, where S is for Server and C for client.
+Each OPCode is represented in a byte. Parenthesis specifies the sender of the code, where S is for Server and C for client.
 ChatOS protocol uses the following OPCodes:
 1. Initialization (C)
 2. Successful operation (S)
