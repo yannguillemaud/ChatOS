@@ -5,6 +5,8 @@ import fr.umlv.chatos.readers.*;
 import fr.umlv.chatos.readers.clientop.ClientOpReader;
 import fr.umlv.chatos.readers.global.GlobalMessage;
 import fr.umlv.chatos.readers.global.GlobalMessageReader;
+import fr.umlv.chatos.readers.initialization.InitializationMessage;
+import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
 
@@ -38,6 +40,7 @@ public class ChatOSServer {
         private boolean closed = false;
 
         private final Reader<ClientMessageOpCode> opReader = new ClientOpReader();
+        private final Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
         private final Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
         private final Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
         private ClientMessageOpCode opCode = null;
@@ -55,18 +58,25 @@ public class ChatOSServer {
             switch (opCode) {
                 case INITIALIZATION -> {
                     for(;;){
-                        Reader.ProcessStatus status = globalMessageReader.process(bbin);
+                        Reader.ProcessStatus status = initializationMessageReader.process(bbin);
                         switch (status) {
                             case DONE -> {
                                 System.out.println("DONE");
                                 opCode = null;
-                                var value = globalMessageReader.get().toByteBuffer(BUFFER_SIZE);
-                                if (value.isEmpty()) {
-                                    globalMessageReader.reset();
+                                var value = initializationMessageReader.get();
+                                var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
+                                if (valueByteBuffer.isEmpty()) {
+                                    // Faut envoyer une réponse au gars pour lui dire fail avec code 2
+                                    initializationMessageReader.reset();
                                     break;
                                 }
-                                server.broadcast(value.orElseThrow());
-                                globalMessageReader.reset();
+                                if (server.checkLogin(value.getLogin())) {
+                                    login = value.getLogin();
+                                    // Faut envoyer une réponse au gars pour lui dire success
+                                } else {
+                                    // Faut envoyer une réponse au gars pour lui dire fail avec code 3
+                                }
+                                initializationMessageReader.reset();
                             }
                             case REFILL -> {
                                 System.out.println("REFILL");
@@ -81,7 +91,8 @@ public class ChatOSServer {
                     }
                 }
                 case GLOBAL_MESSAGE -> {
-                    for(;;){
+                    if (isInitialized()) {
+                        for(;;){
                         Reader.ProcessStatus status = globalMessageReader.process(bbin);
                         switch (status) {
                             case DONE -> {
@@ -89,6 +100,7 @@ public class ChatOSServer {
                                 opCode = null;
                                 var value = globalMessageReader.get().toByteBuffer(BUFFER_SIZE);
                                 if (value.isEmpty()) {
+                                    // Faut envoyer une réponse au gars pour lui dire fail avec code 5
                                     globalMessageReader.reset();
                                     break;
                                 }
@@ -106,33 +118,45 @@ public class ChatOSServer {
                             }
                         }
                     }
+                    } else {
+                        // Faut ajouter une code d'erreur et lui dire qu'il doit init la co
+                    }
                 }
                 case PERSONAL_MESSAGE -> {
-                    for(;;){
-                        Reader.ProcessStatus status = personalMessageReader.process(bbin);
-                        switch (status) {
-                            case DONE -> {
-                                System.out.println("DONE");
-                                opCode = null;
-                                var value = personalMessageReader.get();
-                                var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
-                                if (valueByteBuffer.isEmpty()) {
+                    if (isInitialized()) {
+                        for(;;){
+                            Reader.ProcessStatus status = personalMessageReader.process(bbin);
+                            switch (status) {
+                                case DONE -> {
+                                    System.out.println("DONE");
+                                    opCode = null;
+                                    var value = personalMessageReader.get();
+                                    var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
+                                    if (valueByteBuffer.isEmpty()) {
+                                        // Faut envoyer une réponse au gars pour lui dire fail avec code 5
+                                        personalMessageReader.reset();
+                                        break;
+                                    }
+                                    if (server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow())) {
+                                        // Faut dire au gars que l'utilisateur a bien été trouvé (success)
+                                    } else {
+                                        // Faut dire au gars qu'on a pas trouvé l'utilisateur (code 4)
+                                    }
                                     personalMessageReader.reset();
-                                    break;
                                 }
-                                server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow());
-                                personalMessageReader.reset();
-                            }
-                            case REFILL -> {
-                                System.out.println("REFILL");
-                                return;
-                            }
-                            case ERROR -> {
-                                System.out.println("CLOSE");
-                                silentlyClose();
-                                return;
+                                case REFILL -> {
+                                    System.out.println("REFILL");
+                                    return;
+                                }
+                                case ERROR -> {
+                                    System.out.println("CLOSE");
+                                    silentlyClose();
+                                    return;
+                                }
                             }
                         }
+                    } else {
+                        // Faut ajouter une code d'erreur et lui dire qu'il doit init la co
                     }
                 }
 
@@ -272,7 +296,7 @@ public class ChatOSServer {
         }
 
         public boolean isInitialized() {
-            return login == null;
+            return login != null;
         }
 
         public String login() {
@@ -351,17 +375,29 @@ public class ChatOSServer {
         }
     }
 
+    private boolean checkLogin(String login) {
+        for (SelectionKey selectionKey : selector.keys()) {
+            if (!selectionKey.channel().equals(serverSocketChannel)) {
+                var context = (Context)selectionKey.attachment();
+                if (context.isInitialized() && context.login().equals(login)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 
-    private void sendPersonalMessage(String login, ByteBuffer buffMsg) {
+    private boolean sendPersonalMessage(String login, ByteBuffer buffMsg) {
         for (SelectionKey selectionKey : selector.keys()) {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
                 if (context.isInitialized() && context.login().equals(login)) {
                     context.queueMessage(buffMsg);
-                    return;
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     /**
