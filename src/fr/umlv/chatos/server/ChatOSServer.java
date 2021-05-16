@@ -1,10 +1,12 @@
 package fr.umlv.chatos.server;
 
-import fr.umlv.chatos.opcode.ServerMessageOpCode;
-import fr.umlv.chatos.readers.Message;
-import fr.umlv.chatos.readers.MessageReader;
-import fr.umlv.chatos.readers.Reader;
-import fr.umlv.chatos.readers.ServerOpReader;
+import fr.umlv.chatos.readers.clientop.ClientMessageOpCode;
+import fr.umlv.chatos.readers.*;
+import fr.umlv.chatos.readers.clientop.ClientOpReader;
+import fr.umlv.chatos.readers.global.GlobalMessage;
+import fr.umlv.chatos.readers.global.GlobalMessageReader;
+import fr.umlv.chatos.readers.personal.PersonalMessage;
+import fr.umlv.chatos.readers.personal.PersonalMessageReader;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -31,12 +33,15 @@ public class ChatOSServer {
         private final int BUFFER_SIZE = 1024;
         final private ByteBuffer bbin = ByteBuffer.allocate(BUFFER_SIZE);
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
-        final private Queue<Message> queue = new LinkedList<>();
+        final private Queue<ByteBuffer> queue = new LinkedList<>();
         final private ChatOSServer server;
         private boolean closed = false;
 
-        private final Reader<Message> messageReader = new MessageReader();
-        private final Reader<ServerMessageOpCode> opReader = new ServerOpReader();
+        private final Reader<ClientMessageOpCode> opReader = new ClientOpReader();
+        private final Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
+        private final Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
+        private ClientMessageOpCode opCode = null;
+        private String login = null;
 
 
         private Context(ChatOSServer server, SelectionKey key){
@@ -46,14 +51,93 @@ public class ChatOSServer {
         }
 
 
-        private void processIn(ServerMessageOpCode opCode) {
+        private void processIn() {
             switch (opCode) {
+                case INITIALIZATION -> {
+                    for(;;){
+                        Reader.ProcessStatus status = globalMessageReader.process(bbin);
+                        switch (status) {
+                            case DONE -> {
+                                System.out.println("DONE");
+                                opCode = null;
+                                var value = globalMessageReader.get().toByteBuffer(BUFFER_SIZE);
+                                if (value.isEmpty()) {
+                                    globalMessageReader.reset();
+                                    break;
+                                }
+                                server.broadcast(value.orElseThrow());
+                                globalMessageReader.reset();
+                            }
+                            case REFILL -> {
+                                System.out.println("REFILL");
+                                return;
+                            }
+                            case ERROR -> {
+                                System.out.println("CLOSE");
+                                silentlyClose();
+                                return;
+                            }
+                        }
+                    }
+                }
+                case GLOBAL_MESSAGE -> {
+                    for(;;){
+                        Reader.ProcessStatus status = globalMessageReader.process(bbin);
+                        switch (status) {
+                            case DONE -> {
+                                System.out.println("DONE");
+                                opCode = null;
+                                var value = globalMessageReader.get().toByteBuffer(BUFFER_SIZE);
+                                if (value.isEmpty()) {
+                                    globalMessageReader.reset();
+                                    break;
+                                }
+                                server.broadcast(value.orElseThrow());
+                                globalMessageReader.reset();
+                            }
+                            case REFILL -> {
+                                System.out.println("REFILL");
+                                return;
+                            }
+                            case ERROR -> {
+                                System.out.println("CLOSE");
+                                silentlyClose();
+                                return;
+                            }
+                        }
+                    }
+                }
+                case PERSONAL_MESSAGE -> {
+                    for(;;){
+                        Reader.ProcessStatus status = personalMessageReader.process(bbin);
+                        switch (status) {
+                            case DONE -> {
+                                System.out.println("DONE");
+                                opCode = null;
+                                var value = personalMessageReader.get();
+                                var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
+                                if (valueByteBuffer.isEmpty()) {
+                                    personalMessageReader.reset();
+                                    break;
+                                }
+                                server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow());
+                                personalMessageReader.reset();
+                            }
+                            case REFILL -> {
+                                System.out.println("REFILL");
+                                return;
+                            }
+                            case ERROR -> {
+                                System.out.println("CLOSE");
+                                silentlyClose();
+                                return;
+                            }
+                        }
+                    }
+                }
+
 
             }
-            Reader.ProcessStatus status = messageReader.process(bbin);
-            Message value = messageReader.get();
-            server.broadcast(value);
-            messageReader.reset();
         }
 
         /**
@@ -63,36 +147,42 @@ public class ChatOSServer {
          * to process and after the call
          *
          */
-        private void processIn() {
-            for(;;){
-                Reader.ProcessStatus status = opReader.process(bbin);
-                switch (status) {
-                    case DONE -> {
-                        System.out.println("DONE");
-                        ServerMessageOpCode opCode = opReader.get();
-                        processIn(opCode);
-                        opReader.reset();
-                    }
-                    case REFILL -> {
-                        System.out.println("REFILL");
-                        return;
-                    }
-                    case ERROR -> {
-                        System.out.println("CLOSE");
-                        silentlyClose();
-                        return;
+        private void processInOpCode() {
+            if (opCode != null) {
+                processIn();
+            } else {
+                for(;;){
+                    Reader.ProcessStatus status = opReader.process(bbin);
+                    switch (status) {
+                        case DONE -> {
+                            System.out.println("DONE");
+                            opCode = opReader.get();
+                            opReader.reset();
+                            processIn();
+                            return;
+                        }
+                        case REFILL -> {
+                            System.out.println("REFILL");
+                            return;
+                        }
+                        case ERROR -> {
+                            System.out.println("CLOSE");
+                            silentlyClose();
+                            return;
+                        }
                     }
                 }
+
             }
         }
 
         /**
          * Add a message to the message queue, tries to fill bbOut and updateInterestOps
          *
-         * @param msg
+         * @param buffMsg
          */
-        private void queueMessage(Message msg) {
-            queue.add(msg);
+        private void queueMessage(ByteBuffer buffMsg) {
+            queue.add(buffMsg);
 
             processOut();
             updateInterestOps();
@@ -103,17 +193,13 @@ public class ChatOSServer {
          */
         private void processOut() {
             while (!queue.isEmpty() && bbout.remaining() > Integer.BYTES){
-                Message notRemovedMessage = queue.peek();
-                var loginEncoded = UTF8.encode(notRemovedMessage.getLogin());
-                var messageEncoded = UTF8.encode(notRemovedMessage.getValue());
-                int loginSize = loginEncoded.remaining();
-                int messageSize = messageEncoded.remaining();
-                int totalSize = Integer.BYTES * 2 + loginSize + messageSize;
+                var notRemovedBuffMsg = queue.peek();
 
-                if(bbout.remaining() < totalSize) return;
+                if(bbout.remaining() < notRemovedBuffMsg.remaining()) {
+                    return;
+                }
 
-                bbout.putInt(loginSize).put(loginEncoded);
-                bbout.putInt(messageSize).put(messageEncoded);
+                bbout.put(notRemovedBuffMsg);
                 queue.remove();
             }
         }
@@ -164,7 +250,7 @@ public class ChatOSServer {
             if (sc.read(bbin) == -1) {
                 closed = true;
             }
-            processIn();
+            processInOpCode();
             updateInterestOps();
         }
 
@@ -183,6 +269,14 @@ public class ChatOSServer {
             bbout.compact();
             processOut();
             updateInterestOps();
+        }
+
+        public boolean isInitialized() {
+            return login == null;
+        }
+
+        public String login() {
+            return login;
         }
 
     }
@@ -257,16 +351,29 @@ public class ChatOSServer {
         }
     }
 
+
+    private void sendPersonalMessage(String login, ByteBuffer buffMsg) {
+        for (SelectionKey selectionKey : selector.keys()) {
+            if (!selectionKey.channel().equals(serverSocketChannel)) {
+                var context = (Context)selectionKey.attachment();
+                if (context.isInitialized() && context.login().equals(login)) {
+                    context.queueMessage(buffMsg);
+                    return;
+                }
+            }
+        }
+    }
+
     /**
      * Add a message to all connected clients queue
      *
-     * @param msg
+     * @param buffMsg
      */
-    private void broadcast(Message msg) {
+    private void broadcast(ByteBuffer buffMsg) {
         selector.keys().forEach(selectionKey -> {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
-                context.queueMessage(msg);
+                context.queueMessage(buffMsg);
             }
         });
     }

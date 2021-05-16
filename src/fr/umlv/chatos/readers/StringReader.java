@@ -4,9 +4,11 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
-import static fr.umlv.chatos.readers.Reader.State.*;
 
 public class StringReader implements Reader<String> {
+
+    private enum State {DONE,WAITING,ERROR}
+
     private static final Charset UTF8 = StandardCharsets.UTF_8;
 
     private final int BUFFER_SIZE = 1024;
@@ -14,11 +16,11 @@ public class StringReader implements Reader<String> {
     private final IntReader intReader = new IntReader();
 
     private String value;
-    private State state = WAITING;
+    private State state = State.WAITING;
     private boolean hasSize;
 
     public ProcessStatus process(ByteBuffer bb) {
-        if(state == DONE || state == ERROR) {
+        if(state == State.DONE || state == State.ERROR) {
             throw new IllegalStateException();
         }
         if(stringBuffer.position() == 0 && !hasSize){
@@ -56,7 +58,7 @@ public class StringReader implements Reader<String> {
             return ProcessStatus.REFILL;
         }
 
-        state = DONE;
+        state = State.DONE;
         stringBuffer.flip();
         value = UTF8.decode(stringBuffer).toString();
         return ProcessStatus.DONE;
@@ -65,7 +67,7 @@ public class StringReader implements Reader<String> {
 
     @Override
     public String get() {
-        if(state != DONE) throw new IllegalStateException();
+        if(state != State.DONE) throw new IllegalStateException();
         return value;
     }
 
@@ -75,6 +77,6 @@ public class StringReader implements Reader<String> {
         value = null;
         hasSize = false;
         intReader.reset();
-        state = WAITING;
+        state = State.WAITING;
     }
 }

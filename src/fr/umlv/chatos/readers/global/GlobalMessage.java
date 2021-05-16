@@ -1,17 +1,15 @@
-package fr.umlv.chatos.readers;
+package fr.umlv.chatos.readers.global;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-public class Message {
+public class GlobalMessage {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
-    private final String login;
     private final String value;
 
-    public Message(String login, String value){
-        this.login = login;
+    public GlobalMessage(String value){
         this.value = value;
     }
 
@@ -22,14 +20,11 @@ public class Message {
      * @return An optional containing the message if it has enough space, otherwise an empty one
      */
     public Optional<ByteBuffer> toByteBuffer(int maxBufferSize) {
-        ByteBuffer encodedLogin = UTF8.encode(login);
         ByteBuffer encodedValue = UTF8.encode(value);
-        int loginSize = encodedLogin.remaining();
         int valueSize = encodedValue.remaining();
-        int totalSize = Integer.BYTES * 2 + loginSize + valueSize;
+        int totalSize = Integer.BYTES + valueSize;
         if(totalSize <= maxBufferSize){
             return Optional.of(ByteBuffer.allocate(maxBufferSize)
-                    .putInt(loginSize).put(encodedLogin)
                     .putInt(valueSize).put(encodedValue)
                     .flip()
             );
@@ -38,9 +33,8 @@ public class Message {
 
     @Override
     public String toString() {
-        return login + " " + value;
+        return value;
     }
 
-    public String getLogin(){ return login; }
     public String getValue(){ return value; }
 }

@@ -1,17 +1,21 @@
-package fr.umlv.chatos.readers;
+package fr.umlv.chatos.readers.initialization;
+
+import fr.umlv.chatos.readers.Reader;
+import fr.umlv.chatos.readers.StringReader;
+import fr.umlv.chatos.readers.personal.PersonalMessage;
 
 import java.nio.ByteBuffer;
 
-public class MessageReader implements Reader<Message> {
+public class InitializationMessageReader implements Reader<InitializationMessage> {
 
-    enum State {DONE,WAITING,ERROR}
+    private enum State {DONE,WAITING,ERROR}
 
     private static final int BUFFER_SIZE = 1024;
 
     private final StringReader stringReader = new StringReader();
 
     private State state = State.WAITING;
-    private Message message;
+    private InitializationMessage initializationMessage;
     private String login;
 
     @Override
@@ -34,22 +38,22 @@ public class MessageReader implements Reader<Message> {
         String value = stringReader.get();
         stringReader.reset();
 
-        message = new Message(login, value);
+        initializationMessage = new InitializationMessage(login);
         state = State.DONE;
         return ProcessStatus.DONE;
     }
 
     @Override
-    public Message get() {
+    public InitializationMessage get() {
         if(state != State.DONE) {
             throw new IllegalStateException();
         }
-        return message;
+        return initializationMessage;
     }
 
     @Override
     public void reset() {
-        message = null;
+        initializationMessage = null;
         login = null;
         stringReader.reset();
         state = State.WAITING;

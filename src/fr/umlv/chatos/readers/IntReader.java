@@ -3,7 +3,7 @@ package fr.umlv.chatos.readers;
 import java.nio.ByteBuffer;
 
 public class IntReader implements Reader<Integer> {
-    enum State {DONE,WAITING,ERROR};
+    private enum State {DONE,WAITING,ERROR};
 
     private State state = State.WAITING;
     private final ByteBuffer internalbb = ByteBuffer.allocate(Integer.BYTES); // write-mode
