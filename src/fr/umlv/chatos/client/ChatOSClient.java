@@ -1,5 +1,12 @@
 package fr.umlv.chatos.client;
 
+import fr.umlv.chatos.readers.Reader;
+import fr.umlv.chatos.readers.Reader.ProcessStatus;
+import fr.umlv.chatos.readers.serverop.ServerErrorCode;
+import fr.umlv.chatos.readers.serverop.ServerErrorReader;
+import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
+import fr.umlv.chatos.readers.serverop.ServerOpReader;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
@@ -9,10 +16,14 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Scanner;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Logger;
+
+import static fr.umlv.chatos.client.CommandTransformer.asByteBuffer;
+import static fr.umlv.chatos.readers.serverop.ServerErrorCode.serverErrorCode;
 
 public class ChatOSClient {
     static private class Context {
@@ -22,23 +33,56 @@ public class ChatOSClient {
         final private ByteBuffer bbin = ByteBuffer.allocate(BUFFER_SIZE);
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
         final private Queue<ByteBuffer> queue = new LinkedList<>(); // buffers read-mode
-        //final private MessageReader messageReader = new MessageReader();
+        final private ServerOpReader serverOpReader = new ServerOpReader();
+        final private ServerErrorReader serverErrorReader = new ServerErrorReader();
         private boolean closed = false;
 
-        private Context(SelectionKey key){
+        private Context(SelectionKey key) {
             this.key = key;
             this.sc = (SocketChannel) key.channel();
         }
 
         /**
          * Process the content of bbin
-         *
+         * <p>
          * The convention is that bbin is in write-mode before the call
          * to process and after the call
-         *
          */
         private void processIn() {
-            // TODO
+            ProcessStatus status = serverOpReader.process(bbin);
+            switch(status){
+                case DONE:
+                    ServerMessageOpCode opCode = serverOpReader.get();
+                    logger.info("Received opcode: " + opCode);
+                    processOpCode(opCode);
+                    serverOpReader.reset();
+                case REFILL: return;
+                case ERROR: {
+                    silentlyClose();
+                    return;
+                }
+            }
+        }
+
+        private void processOpCode(ServerMessageOpCode opCode){
+            switch (opCode){
+                case FAIL:
+                    for(;;){
+                        ProcessStatus status = serverErrorReader.process(bbin);
+                        switch (status){
+                            case DONE:
+                                ServerErrorCode errorCode = serverErrorReader.get();
+                                System.out.println("Done. ErrorCode: " + errorCode);
+                                serverErrorReader.reset();
+                                return;
+                            case REFILL: continue;
+                            case ERROR:
+                                logger.severe("ErrorStatus. Closing.");
+                                silentlyClose();
+                                return;
+                        }
+                    }
+            }
         }
 
         /**
@@ -47,20 +91,31 @@ public class ChatOSClient {
          * @param bb
          */
         private void queueMessage(ByteBuffer bb) {
+            synchronized (queue) {
+                queue.add(bb);
+                processOut();
+                updateInterestOps();
+            }
         }
 
         /**
          * Try to fill bbout from the message queue
-         *
          */
         private void processOut() {
+            while(!queue.isEmpty()){
+                var bb = queue.peek();
+                if(bb.remaining() <= bbout.remaining()){
+                    queue.remove();
+                    bbout.put(bb);
+                } else break;
+            }
         }
 
         /**
          * Update the interestOps of the key looking
          * only at values of the boolean closed and
          * of both ByteBuffers.
-         *
+         * <p>
          * The convention is that both buffers are in write-mode before the call
          * to updateInterestOps and after the call.
          * Also it is assumed that process has been be called just
@@ -68,25 +123,47 @@ public class ChatOSClient {
          */
 
         private void updateInterestOps() {
+            var interesOps=0;
+            if (!closed && bbin.hasRemaining()){
+                interesOps=interesOps|SelectionKey.OP_READ;
+            }
+            if (bbout.position()!=0){
+                interesOps|=SelectionKey.OP_WRITE;
+            }
+            if (interesOps==0){
+                silentlyClose();
+                return;
+            }
+            key.interestOps(interesOps);
         }
 
         private void silentlyClose() {
+            try {
+                sc.close();
+            } catch (IOException e) {
+                // ignore exception
+            }
         }
 
         /**
          * Performs the read action on sc
-         *
+         * <p>
          * The convention is that both buffers are in write-mode before the call
          * to doRead and after the call
          *
          * @throws IOException
          */
         private void doRead() throws IOException {
+            if (sc.read(bbin) == -1) {
+                closed = true;
+            }
+            processIn();
+            updateInterestOps();
         }
 
         /**
          * Performs the write action on sc
-         *
+         * <p>
          * The convention is that both buffers are in write-mode before the call
          * to doWrite and after the call
          *
@@ -94,11 +171,19 @@ public class ChatOSClient {
          */
 
         private void doWrite() throws IOException {
-
+            bbout.flip();
+            sc.write(bbout);
+            bbout.compact();
+            processOut();
+            updateInterestOps();
         }
 
         public void doConnect() throws IOException {
             // TODO
+            if (!sc.finishConnect()) {
+                return; //bad hint
+            }
+            key.interestOps(SelectionKey.OP_READ);
         }
     }
 
@@ -144,6 +229,10 @@ public class ChatOSClient {
      */
     private void sendCommand(String msg) throws InterruptedException {
         // TODO
+        synchronized (commandQueue){
+            commandQueue.put(msg);
+            selector.wakeup();
+        }
     }
 
     /**
@@ -151,6 +240,18 @@ public class ChatOSClient {
      */
     private void processCommands(){
         // TODO
+        synchronized (commandQueue){
+            while(!commandQueue.isEmpty()){
+                String commandLine = commandQueue.poll();
+                Optional<ByteBuffer> optional = asByteBuffer(commandLine);
+                if(optional.isEmpty()) {
+                    logger.severe("Error occured with: " + commandLine);
+                    continue;
+                }
+                ByteBuffer commandBuffer = optional.get();
+                uniqueContext.queueMessage(commandBuffer);
+            }
+        }
     }
 
     /**
