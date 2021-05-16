@@ -15,8 +15,9 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * Helps getting transformed string into protocol's trame
- * Due to our RFC, each client might not use the same Charset (as it could be if we forced UTF8 Charset usage)
- * Therefore each client should create its own CommandTransformer according to it's defined charset
+ * Due to our RFC, each client uses the same Charset (forced UTF8 Charset usage)
+ * However to improves this protocols each client might use its own charset
+ * Therefore each client whill have to create its own CommandTransformer according to it's defined charset
  */
 public class CommandTransformer {
     private static final int BUFFER_SIZE = 1024;
