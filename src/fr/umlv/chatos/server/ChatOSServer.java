@@ -5,6 +5,8 @@ import fr.umlv.chatos.readers.*;
 import fr.umlv.chatos.readers.clientop.ClientOpReader;
 import fr.umlv.chatos.readers.global.GlobalMessage;
 import fr.umlv.chatos.readers.global.GlobalMessageReader;
+import fr.umlv.chatos.readers.initialization.InitializationMessage;
+import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
 
@@ -40,6 +42,7 @@ public class ChatOSServer {
         private final Reader<ClientMessageOpCode> opReader = new ClientOpReader();
         private final Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
         private final Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
+        private final Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
         private ClientMessageOpCode opCode = null;
         private String login = null;
 
@@ -55,18 +58,18 @@ public class ChatOSServer {
             switch (opCode) {
                 case INITIALIZATION -> {
                     for(;;){
-                        Reader.ProcessStatus status = globalMessageReader.process(bbin);
+                        Reader.ProcessStatus status = initializationMessageReader.process(bbin);
                         switch (status) {
                             case DONE -> {
                                 System.out.println("DONE");
                                 opCode = null;
-                                var value = globalMessageReader.get().toByteBuffer(BUFFER_SIZE);
+                                var value = initializationMessageReader.get().toByteBuffer(BUFFER_SIZE);
                                 if (value.isEmpty()) {
-                                    globalMessageReader.reset();
+                                    initializationMessageReader.reset();
                                     break;
                                 }
                                 server.broadcast(value.orElseThrow());
-                                globalMessageReader.reset();
+                                initializationMessageReader.reset();
                             }
                             case REFILL -> {
                                 System.out.println("REFILL");
@@ -387,7 +390,7 @@ public class ChatOSServer {
     }
 
     private static void usage(){
-        System.out.println("Usage : ServerSumBetter port");
+        System.out.println("Usage : ChatOSServer port");
     }
 
     /***

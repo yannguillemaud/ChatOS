@@ -61,6 +61,7 @@ public class CommandTransformer {
         requireNonNull(commandString);
         String[] tokens = commandString.split(" ");
         if(tokens.length < 2) return Optional.empty();
+        System.out.println("Tokens: " + Arrays.toString(tokens));
         return transformCommand(tokens);
     }
 
@@ -111,6 +112,7 @@ public class CommandTransformer {
                 .putInt(loginSize).put(encodedLogin)
                 .flip();
 
+        logger.info("Correct init packet from " + login);
         return Optional.of(initBuffer);
     }
 
@@ -138,6 +140,7 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
+        logger.info("Correct global message packet: " + message);
         var messageBuffer = ByteBuffer.allocate(BUFFER_SIZE)
                 .put(opCode)
                 .putInt(messageSize).put(encodedMessage)
@@ -173,6 +176,7 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
+        logger.info("Correct private message packet to: " + adresseLogin);
         ByteBuffer messageBuffer = ByteBuffer.allocate(BUFFER_SIZE)
                 .put(opCode)
                 .putInt(loginSize).put(encodedLogin)
@@ -205,6 +209,7 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
+        logger.info("Correct connexion request packet to: " + adresseeLogin);
         ByteBuffer requestBuffer = ByteBuffer.allocate(BUFFER_SIZE)
                 .put(opCode)
                 .putInt(loginSize).put(encodedLogin)
