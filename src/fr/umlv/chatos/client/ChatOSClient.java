@@ -1,7 +1,12 @@
 package fr.umlv.chatos.client;
 
-import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.Reader.ProcessStatus;
+import fr.umlv.chatos.readers.global.GlobalMessage;
+import fr.umlv.chatos.readers.global.GlobalMessageReader;
+import fr.umlv.chatos.readers.initialization.InitializationMessage;
+import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
+import fr.umlv.chatos.readers.personal.PersonalMessage;
+import fr.umlv.chatos.readers.personal.PersonalMessageReader;
 import fr.umlv.chatos.readers.serverop.ServerErrorCode;
 import fr.umlv.chatos.readers.serverop.ServerErrorReader;
 import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
@@ -23,7 +28,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Logger;
 
 import static fr.umlv.chatos.client.CommandTransformer.asByteBuffer;
-import static fr.umlv.chatos.readers.serverop.ServerErrorCode.serverErrorCode;
 
 public class ChatOSClient {
     static private class Context {
@@ -33,8 +37,13 @@ public class ChatOSClient {
         final private ByteBuffer bbin = ByteBuffer.allocate(BUFFER_SIZE);
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
         final private Queue<ByteBuffer> queue = new LinkedList<>(); // buffers read-mode
+
         final private ServerOpReader serverOpReader = new ServerOpReader();
         final private ServerErrorReader serverErrorReader = new ServerErrorReader();
+        final private InitializationMessageReader initializationMessageReader = new InitializationMessageReader();
+        final private GlobalMessageReader globalMessageReader = new GlobalMessageReader();
+        final private PersonalMessageReader personalMessageReader = new PersonalMessageReader();
+
         private boolean closed = false;
 
         private Context(SelectionKey key) {
@@ -66,6 +75,17 @@ public class ChatOSClient {
 
         private void processOpCode(ServerMessageOpCode opCode){
             switch (opCode){
+                case SUCCESS:
+                    processInitializationMessage();
+                    return;
+                case GLOBAL_MESSAGE:
+                    processGlobalMessage();
+                    return;
+                case PERSONAL_MESSAGE:
+                    processPersonalMessage();
+                    return;
+                case PRIVATE_CONNECTION_ESTABLISHMENT:
+                    processSuccessConnexion();
                 case FAIL:
                     for(;;){
                         ProcessStatus status = serverErrorReader.process(bbin);
@@ -83,6 +103,70 @@ public class ChatOSClient {
                         }
                     }
             }
+        }
+
+        private void processInitializationMessage(){
+            for(;;) {
+                ProcessStatus status = initializationMessageReader.process(bbin);
+                switch (status) {
+                    case DONE:
+                        InitializationMessage message = initializationMessageReader.get();
+                        System.out.println(message);
+                        initializationMessageReader.reset();
+                        return;
+                    case REFILL:
+                        continue;
+                    case ERROR: {
+                        logger.severe("ErrorStatus. Closing.");
+                        silentlyClose();
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void processGlobalMessage(){
+            for(;;) {
+                ProcessStatus status = globalMessageReader.process(bbin);
+                switch (status) {
+                    case DONE:
+                        GlobalMessage message = globalMessageReader.get();
+                        System.out.println(message);
+                        globalMessageReader.reset();
+                        return;
+                    case REFILL:
+                        continue;
+                    case ERROR: {
+                        logger.severe("ErrorStatus. Closing.");
+                        silentlyClose();
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void processPersonalMessage(){
+            for(;;) {
+                ProcessStatus status = personalMessageReader.process(bbin);
+                switch (status) {
+                    case DONE:
+                        PersonalMessage message = personalMessageReader.get();
+                        System.out.println(message);
+                        personalMessageReader.reset();
+                        return;
+                    case REFILL:
+                        continue;
+                    case ERROR: {
+                        logger.severe("ErrorStatus. Closing.");
+                        silentlyClose();
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void processSuccessConnexion(){
+            //TODO
         }
 
         /**

@@ -38,7 +38,7 @@ public class PersonalMessage {
 
     @Override
     public String toString() {
-        return login + " " + value;
+        return "Personal Message from " + login + ": " + value;
     }
 
     public String getLogin(){ return login; }

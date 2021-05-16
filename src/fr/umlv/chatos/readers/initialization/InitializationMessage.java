@@ -33,7 +33,7 @@ public class InitializationMessage {
 
     @Override
     public String toString() {
-        return login;
+        return "Initialisation of " + login;
     }
 
     public String getLogin(){ return login; }

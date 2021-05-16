@@ -33,7 +33,7 @@ public class GlobalMessage {
 
     @Override
     public String toString() {
-        return value;
+        return "Global Message: " + value;
     }
 
     public String getValue(){ return value; }
