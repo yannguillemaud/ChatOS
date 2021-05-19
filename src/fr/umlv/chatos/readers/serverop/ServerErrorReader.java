@@ -1,12 +1,13 @@
 package fr.umlv.chatos.readers.serverop;
 
+import fr.umlv.chatos.readers.ByteReader;
 import fr.umlv.chatos.readers.IntReader;
 import fr.umlv.chatos.readers.Reader;
 
 import java.nio.ByteBuffer;
 
 public class ServerErrorReader implements Reader<ServerErrorCode> {
-    private final IntReader intReader = new IntReader();
+    private final ByteReader intReader = new ByteReader();
     private ProcessStatus state = ProcessStatus.REFILL;
     private ServerErrorCode opCode = null;
 

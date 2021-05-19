@@ -65,8 +65,11 @@ public class ChatOSClient {
                     logger.info("Received opcode: " + opCode);
                     processOpCode(opCode);
                     serverOpReader.reset();
-                case REFILL: return;
+                case REFILL:
+                    System.out.println("Refill processIn");
+                    return;
                 case ERROR: {
+                    System.out.println("Error processIn");
                     silentlyClose();
                     return;
                 }
@@ -74,6 +77,7 @@ public class ChatOSClient {
         }
 
         private void processOpCode(ServerMessageOpCode opCode){
+            System.out.println("Received: " + opCode);
             switch (opCode){
                 case SUCCESS:
                     processInitializationMessage();
@@ -150,11 +154,14 @@ public class ChatOSClient {
                 ProcessStatus status = personalMessageReader.process(bbin);
                 switch (status) {
                     case DONE:
+                        System.out.println("DONE perso");
                         PersonalMessage message = personalMessageReader.get();
+                        System.out.println(message);
                         System.out.println(message);
                         personalMessageReader.reset();
                         return;
                     case REFILL:
+                        System.out.println("REFILL perso");
                         continue;
                     case ERROR: {
                         logger.severe("ErrorStatus. Closing.");
@@ -329,7 +336,7 @@ public class ChatOSClient {
                 String commandLine = commandQueue.poll();
                 Optional<ByteBuffer> optional = asByteBuffer(commandLine);
                 if(optional.isEmpty()) {
-                    logger.severe("Error occured with: " + commandLine);
+                    System.out.println("Could not process: " + commandLine);
                     continue;
                 }
                 ByteBuffer commandBuffer = optional.get();

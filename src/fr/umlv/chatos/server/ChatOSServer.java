@@ -9,6 +9,8 @@ import fr.umlv.chatos.readers.initialization.InitializationMessage;
 import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
+import fr.umlv.chatos.readers.serverop.ServerErrorCode;
+import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -17,12 +19,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.Queue;
-import java.util.Set;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import static fr.umlv.chatos.readers.initialization.InitializationMessage.*;
+import static fr.umlv.chatos.readers.initialization.InitializationMessage.acceptByteBuffer;
+import static fr.umlv.chatos.readers.serverop.ServerErrorCode.ALREADY_USED;
 
 public class ChatOSServer {
 
@@ -61,14 +64,18 @@ public class ChatOSServer {
                         Reader.ProcessStatus status = initializationMessageReader.process(bbin);
                         switch (status) {
                             case DONE -> {
-                                System.out.println("DONE");
+                                System.out.println("DONE init");
                                 opCode = null;
-                                var value = initializationMessageReader.get().toByteBuffer(BUFFER_SIZE);
-                                if (value.isEmpty()) {
-                                    initializationMessageReader.reset();
-                                    break;
+                                InitializationMessage message = initializationMessageReader.get();
+                                String login = message.getLogin();
+                                ByteBuffer serverResponse;
+                                if (server.isLoginAvailable(login)) {
+                                    serverResponse = acceptByteBuffer();
+                                    this.login = login;
+                                } else {
+                                    serverResponse = failureByteBuffer(ALREADY_USED);
                                 }
-                                server.broadcast(value.orElseThrow());
+                                server.sendPersonalMessage(login, serverResponse);
                                 initializationMessageReader.reset();
                             }
                             case REFILL -> {
@@ -88,7 +95,7 @@ public class ChatOSServer {
                         Reader.ProcessStatus status = globalMessageReader.process(bbin);
                         switch (status) {
                             case DONE -> {
-                                System.out.println("DONE");
+                                System.out.println("DONE global");
                                 opCode = null;
                                 var value = globalMessageReader.get().toByteBuffer(BUFFER_SIZE);
                                 if (value.isEmpty()) {
@@ -99,11 +106,11 @@ public class ChatOSServer {
                                 globalMessageReader.reset();
                             }
                             case REFILL -> {
-                                System.out.println("REFILL");
+                                System.out.println("REFILL global");
                                 return;
                             }
                             case ERROR -> {
-                                System.out.println("CLOSE");
+                                System.out.println("CLOSE global");
                                 silentlyClose();
                                 return;
                             }
@@ -115,10 +122,10 @@ public class ChatOSServer {
                         Reader.ProcessStatus status = personalMessageReader.process(bbin);
                         switch (status) {
                             case DONE -> {
-                                System.out.println("DONE");
                                 opCode = null;
                                 var value = personalMessageReader.get();
                                 var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
+                                System.out.println("Perso: " + valueByteBuffer);
                                 if (valueByteBuffer.isEmpty()) {
                                     personalMessageReader.reset();
                                     break;
@@ -127,7 +134,7 @@ public class ChatOSServer {
                                 personalMessageReader.reset();
                             }
                             case REFILL -> {
-                                System.out.println("REFILL");
+                                System.out.println("REFILL perso");
                                 return;
                             }
                             case ERROR -> {
@@ -158,18 +165,17 @@ public class ChatOSServer {
                     Reader.ProcessStatus status = opReader.process(bbin);
                     switch (status) {
                         case DONE -> {
-                            System.out.println("DONE");
                             opCode = opReader.get();
+                            System.out.println("Received: " + opCode);
                             opReader.reset();
                             processIn();
                             return;
                         }
                         case REFILL -> {
-                            System.out.println("REFILL");
                             return;
                         }
                         case ERROR -> {
-                            System.out.println("CLOSE");
+                            System.out.println("CLOSE opcode");
                             silentlyClose();
                             return;
                         }
@@ -178,6 +184,14 @@ public class ChatOSServer {
 
             }
         }
+
+        /**
+         * Tries to init the client according to its login
+         * Asks the server to verify if the specified login is available
+         * Return true if it is, false otherwise
+         * @param loginBuffer
+         * @return
+         */
 
         /**
          * Add a message to the message queue, tries to fill bbOut and updateInterestOps
@@ -275,7 +289,7 @@ public class ChatOSServer {
         }
 
         public boolean isInitialized() {
-            return login == null;
+            return login != null;
         }
 
         public String login() {
@@ -354,8 +368,23 @@ public class ChatOSServer {
         }
     }
 
+    private boolean isLoginAvailable(String login){
+        logger.info("Checking availability for " + login);
+        for (SelectionKey selectionKey : selector.keys()) {
+            if (!selectionKey.channel().equals(serverSocketChannel)) {
+                var context = (Context)selectionKey.attachment();
+                System.out.println("Login: " + context.login);
+                if (context.isInitialized() && context.login().equals(login)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
 
     private void sendPersonalMessage(String login, ByteBuffer buffMsg) {
+        logger.info("Sending " + buffMsg + " to " + login);
         for (SelectionKey selectionKey : selector.keys()) {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();

@@ -131,6 +131,7 @@ public class CommandTransformer {
         byte opCode = (byte) ClientMessageOpCode.GLOBAL_MESSAGE.value();
         String message = Arrays.stream(tokens, 1, tokens.length)
                 .collect(Collectors.joining(" "));
+        logger.info("Created global : " + message);
         ByteBuffer encodedMessage = charset.encode(message);
         int messageSize = encodedMessage.remaining();
 
@@ -150,6 +151,7 @@ public class CommandTransformer {
 
     /**
      * Processes user command line into a private message bytebuffer
+     * Command: PRIVATEMSG to message
      * @param tokens user command line
      * @return Optional of bytebuffer, containing ChatOs private message bytebuffer
      * returns an Optional.empty if the buffer size is > 1024

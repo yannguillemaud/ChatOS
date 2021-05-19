@@ -1,5 +1,6 @@
 package fr.umlv.chatos.readers.clientop;
 
+import fr.umlv.chatos.readers.ByteReader;
 import fr.umlv.chatos.readers.IntReader;
 import fr.umlv.chatos.readers.Reader;
 
@@ -7,7 +8,7 @@ import java.nio.ByteBuffer;
 
 public class ClientOpReader implements Reader<ClientMessageOpCode> {
 
-    private final IntReader intReader = new IntReader();
+    private final ByteReader byteReader = new ByteReader();
     private ProcessStatus state = ProcessStatus.REFILL;
     private ClientMessageOpCode opCode = null;
 
@@ -18,9 +19,9 @@ public class ClientOpReader implements Reader<ClientMessageOpCode> {
             throw new IllegalStateException();
         }
 
-        state = intReader.process(bb);
+        state = byteReader.process(bb);
         if (state == ProcessStatus.DONE) {
-            var optionalOpCode = ClientMessageOpCode.clientMessageOpCode(intReader.get());
+            var optionalOpCode = ClientMessageOpCode.clientMessageOpCode(byteReader.get());
             if (optionalOpCode.isEmpty()) {
                 state = ProcessStatus.ERROR;
             } else {
@@ -43,6 +44,6 @@ public class ClientOpReader implements Reader<ClientMessageOpCode> {
     @Override
     public void reset() {
         state = ProcessStatus.REFILL;
-        intReader.reset();
+        byteReader.reset();
     }
 }

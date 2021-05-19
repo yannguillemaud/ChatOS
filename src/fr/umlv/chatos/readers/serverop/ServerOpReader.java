@@ -1,5 +1,6 @@
 package fr.umlv.chatos.readers.serverop;
 
+import fr.umlv.chatos.readers.ByteReader;
 import fr.umlv.chatos.readers.IntReader;
 import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
@@ -8,7 +9,7 @@ import java.nio.ByteBuffer;
 
 public class ServerOpReader implements Reader<ServerMessageOpCode> {
 
-    private final IntReader intReader = new IntReader();
+    private final ByteReader intReader = new ByteReader();
     private ProcessStatus state = ProcessStatus.REFILL;
     private ServerMessageOpCode opCode = null;
 
