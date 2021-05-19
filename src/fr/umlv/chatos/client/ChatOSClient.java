@@ -1,5 +1,6 @@
 package fr.umlv.chatos.client;
 
+import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.Reader.ProcessStatus;
 import fr.umlv.chatos.readers.global.GlobalMessage;
 import fr.umlv.chatos.readers.global.GlobalMessageReader;
@@ -20,6 +21,7 @@ import java.nio.channels.Channel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.rmi.ServerError;
 import java.util.LinkedList;
 import java.util.Optional;
 import java.util.Queue;
@@ -38,11 +40,10 @@ public class ChatOSClient {
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
         final private Queue<ByteBuffer> queue = new LinkedList<>(); // buffers read-mode
 
-        final private ServerOpReader serverOpReader = new ServerOpReader();
-        final private ServerErrorReader serverErrorReader = new ServerErrorReader();
-        final private InitializationMessageReader initializationMessageReader = new InitializationMessageReader();
-        final private GlobalMessageReader globalMessageReader = new GlobalMessageReader();
-        final private PersonalMessageReader personalMessageReader = new PersonalMessageReader();
+        final private Reader<ServerMessageOpCode> serverOpReader = new ServerOpReader();
+        final private Reader<ServerErrorCode> serverErrorReader = new ServerErrorReader();
+        final private Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
+        final private Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
 
         private boolean closed = false;
 
@@ -80,7 +81,7 @@ public class ChatOSClient {
             System.out.println("Received: " + opCode);
             switch (opCode){
                 case SUCCESS:
-                    processInitializationMessage();
+                    System.out.println("Success");
                     return;
                 case GLOBAL_MESSAGE:
                     processGlobalMessage();
@@ -90,41 +91,27 @@ public class ChatOSClient {
                     return;
                 case PRIVATE_CONNECTION_ESTABLISHMENT:
                     processSuccessConnexion();
+                    return;
                 case FAIL:
-                    for(;;){
-                        ProcessStatus status = serverErrorReader.process(bbin);
-                        switch (status){
-                            case DONE:
-                                ServerErrorCode errorCode = serverErrorReader.get();
-                                System.out.println("Done. ErrorCode: " + errorCode);
-                                serverErrorReader.reset();
-                                return;
-                            case REFILL: continue;
-                            case ERROR:
-                                logger.severe("ErrorStatus. Closing.");
-                                silentlyClose();
-                                return;
-                        }
-                    }
+                    processFail();
+                    return;
             }
         }
 
-        private void processInitializationMessage(){
-            for(;;) {
-                ProcessStatus status = initializationMessageReader.process(bbin);
-                switch (status) {
+        private void processFail(){
+            for(;;){
+                ProcessStatus status = serverErrorReader.process(bbin);
+                switch (status){
                     case DONE:
-                        InitializationMessage message = initializationMessageReader.get();
-                        System.out.println(message);
-                        initializationMessageReader.reset();
+                        ServerErrorCode errorCode = serverErrorReader.get();
+                        System.out.println("Done. ErrorCode: " + errorCode);
+                        serverErrorReader.reset();
                         return;
-                    case REFILL:
-                        continue;
-                    case ERROR: {
+                    case REFILL: continue;
+                    case ERROR:
                         logger.severe("ErrorStatus. Closing.");
                         silentlyClose();
                         return;
-                    }
                 }
             }
         }
@@ -156,7 +143,6 @@ public class ChatOSClient {
                     case DONE:
                         System.out.println("DONE perso");
                         PersonalMessage message = personalMessageReader.get();
-                        System.out.println(message);
                         System.out.println(message);
                         personalMessageReader.reset();
                         return;

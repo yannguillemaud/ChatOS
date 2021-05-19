@@ -64,7 +64,7 @@ public class ChatOSServer {
                         Reader.ProcessStatus status = initializationMessageReader.process(bbin);
                         switch (status) {
                             case DONE -> {
-                                System.out.println("DONE init");
+                                System.out.println("DONE");
                                 opCode = null;
                                 InitializationMessage message = initializationMessageReader.get();
                                 String login = message.getLogin();
@@ -125,7 +125,6 @@ public class ChatOSServer {
                                 opCode = null;
                                 var value = personalMessageReader.get();
                                 var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
-                                System.out.println("Perso: " + valueByteBuffer);
                                 if (valueByteBuffer.isEmpty()) {
                                     personalMessageReader.reset();
                                     break;

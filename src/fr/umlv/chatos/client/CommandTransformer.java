@@ -61,7 +61,6 @@ public class CommandTransformer {
         requireNonNull(commandString);
         String[] tokens = commandString.split(" ");
         if(tokens.length < 2) return Optional.empty();
-        System.out.println("Tokens: " + Arrays.toString(tokens));
         return transformCommand(tokens);
     }
 
@@ -178,7 +177,7 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
-        logger.info("Correct private message packet to: " + adresseLogin);
+        System.out.println("Correct private message packet to: " + adresseLogin);
         ByteBuffer messageBuffer = ByteBuffer.allocate(BUFFER_SIZE)
                 .put(opCode)
                 .putInt(loginSize).put(encodedLogin)
