@@ -1,10 +1,11 @@
 package fr.umlv.chatos.server;
 
 import fr.umlv.chatos.readers.Reader;
+import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessage;
+import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessageReader;
 import fr.umlv.chatos.readers.opcode.OpCode;
 import fr.umlv.chatos.readers.opcode.OpCodeReader;
-import fr.umlv.chatos.readers.global.GlobalMessage;
-import fr.umlv.chatos.readers.global.GlobalMessageReader;
+import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessage;
 import fr.umlv.chatos.readers.initialization.InitializationMessage;
 import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
@@ -22,8 +23,6 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -48,7 +47,7 @@ public class ChatOSServer {
         private final Reader<OpCode> opReader = new OpCodeReader();
         private final Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
         private final Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
-        private final Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
+        private final Reader<ClientGlobalMessage> clientGlobalMessageReader = new ClientGlobalMessageReader();
         private final Reader<PrivateConnectionRequest> privateConnectionRequestReader = new PrivateConnectionRequestReader();
         private final Reader<PrivateConnectionResponse> privateConnectionResponseReader = new PrivateConnectionResponseReader();
         private final Reader<PrivateConnectionClientEstablishment> privateConnectionClientEstablishmentReader = new PrivateConnectionClientEstablishmentReader();
@@ -110,22 +109,22 @@ public class ChatOSServer {
                         }
                     }
                 }
-                case GLOBAL_MESSAGE -> {
+                case GLOBAL_MESSAGE_CLIENT -> {
                     for(;;){
-                        Reader.ProcessStatus status = globalMessageReader.process(bbin);
+                        Reader.ProcessStatus status = clientGlobalMessageReader.process(bbin);
                         switch (status) {
                             case DONE -> {
                                 System.out.println("DONE global");
                                 opCode = null;
-                                var globalMessage = globalMessageReader.get();
-                                var globalMessageToSend = new GlobalMessage(globalMessage.getValue(), login);
+                                var globalMessage = clientGlobalMessageReader.get();
+                                var globalMessageToSend = new ServerGlobalMessage(globalMessage.getValue(), login);
                                 var globalMessageToSendByteBuffer = globalMessageToSend.toByteBuffer(BUFFER_SIZE);
                                 if (globalMessageToSendByteBuffer.isEmpty()) {
-                                    globalMessageReader.reset();
+                                    clientGlobalMessageReader.reset();
                                     break;
                                 }
                                 server.broadcast(globalMessageToSendByteBuffer.orElseThrow());
-                                globalMessageReader.reset();
+                                clientGlobalMessageReader.reset();
                             }
                             case REFILL -> {
                                 System.out.println("REFILL global");

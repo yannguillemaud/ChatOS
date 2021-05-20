@@ -1,19 +1,19 @@
-package fr.umlv.chatos.readers.personal;
+package fr.umlv.chatos.readers.serverglobal;
 
 import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.StringReader;
 
 import java.nio.ByteBuffer;
 
-public class PersonalMessageReader implements Reader<PersonalMessage> {
+public class ServerGlobalMessageReader implements Reader<ServerGlobalMessage> {
 
     private enum State {DONE,WAITING,ERROR}
 
     private final StringReader stringReader = new StringReader();
 
     private State state = State.WAITING;
-    private PersonalMessage personalMessage;
     private String login;
+    private ServerGlobalMessage serverGlobalMessage;
 
     @Override
     public ProcessStatus process(ByteBuffer bb) {
@@ -32,26 +32,27 @@ public class PersonalMessageReader implements Reader<PersonalMessage> {
         if(messageReaderStatus != ProcessStatus.DONE) {
             return messageReaderStatus;
         }
+
         String value = stringReader.get();
         stringReader.reset();
 
-        personalMessage = new PersonalMessage(login, value);
+        serverGlobalMessage = new ServerGlobalMessage(login, value);
         state = State.DONE;
         return ProcessStatus.DONE;
     }
 
     @Override
-    public PersonalMessage get() {
+    public ServerGlobalMessage get() {
         if(state != State.DONE) {
             throw new IllegalStateException();
         }
-        return personalMessage;
+        return serverGlobalMessage;
     }
 
     @Override
     public void reset() {
-        personalMessage = null;
         login = null;
+        serverGlobalMessage = null;
         stringReader.reset();
         state = State.WAITING;
     }

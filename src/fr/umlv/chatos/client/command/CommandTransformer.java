@@ -1,6 +1,10 @@
-package fr.umlv.chatos.client;
+package fr.umlv.chatos.client.command;
 
+import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessage;
+import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessage;
+import fr.umlv.chatos.readers.initialization.InitializationMessage;
 import fr.umlv.chatos.readers.opcode.OpCode;
+import fr.umlv.chatos.readers.personal.PersonalMessage;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -10,7 +14,6 @@ import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-import static fr.umlv.chatos.readers.clientop.ClientMessageOpCode.GLOBAL_MESSAGE;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -124,12 +127,11 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
-        byte opCode = OpCode.GLOBAL_MESSAGE.value();
         String message = Arrays.stream(tokens, 1, tokens.length)
                 .collect(Collectors.joining(" "));
 
-        GlobalMessage globalMessage = new GlobalMessage(linkedLogin, message);
-        Optional<ByteBuffer> optional = globalMessage.toByteBuffer(BUFFER_SIZE);
+        var clientGlobalMessage = new ClientGlobalMessage(message);
+        Optional<ByteBuffer> optional = clientGlobalMessage.toByteBuffer(BUFFER_SIZE);
         if(optional.isEmpty()){
             System.out.println("Message too long");
         }
@@ -145,17 +147,14 @@ public class CommandTransformer {
      */
     private Optional<ByteBuffer> privateMsgToBB(String[] tokens){
         if(tokens.length < 3) {
-            globalMessageUsage();
+            privateMessageUsage();
             return Optional.empty();
         }
 
-        byte opCode = OpCode.PERSONAL_MESSAGE.value();
-        String adresseLogin = tokens[1];
-        ByteBuffer encodedLogin = charset.encode(adresseLogin);
-        int loginSize = encodedLogin.remaining();
+        String login = tokens[1];
         String message = Arrays.stream(tokens, 2, tokens.length)
                 .collect(Collectors.joining(" "));
-        Optional<ByteBuffer> optional = new PersonalMessage(linkedLogin, to, message).toByteBuffer(BUFFER_SIZE);
+        Optional<ByteBuffer> optional = new PersonalMessage(login, message).toByteBuffer(BUFFER_SIZE);
         if(optional.isEmpty()){
             System.out.println("Message too long");
         }

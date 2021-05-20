@@ -1,9 +1,10 @@
 package fr.umlv.chatos.client;
 
+import fr.umlv.chatos.client.command.CommandTransformer;
 import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.Reader.ProcessStatus;
-import fr.umlv.chatos.readers.global.GlobalMessage;
-import fr.umlv.chatos.readers.global.GlobalMessageReader;
+import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessage;
+import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessageReader;
 import fr.umlv.chatos.readers.opcode.OpCode;
 import fr.umlv.chatos.readers.opcode.OpCodeReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
@@ -37,7 +38,7 @@ public class ChatOSClient {
 
         final private Reader<OpCode> serverOpReader = new OpCodeReader();
         final private Reader<ServerErrorCode> serverErrorReader = new ServerErrorReader();
-        final private Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
+        final private Reader<ServerGlobalMessage> globalMessageReader = new ServerGlobalMessageReader();
         final private Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
 
         private boolean closed = false;
@@ -56,39 +57,29 @@ public class ChatOSClient {
         private void processIn() {
             ProcessStatus status = serverOpReader.process(bbin);
             switch(status){
-                case DONE:
+                case DONE -> {
                     OpCode opCode = serverOpReader.get();
                     logger.info("Received opcode: " + opCode);
                     processOpCode(opCode);
                     serverOpReader.reset();
-                case REFILL:
-                    return;
-                case ERROR: {
+
+                }
+                case REFILL -> {}
+                case ERROR ->  {
                     System.out.println("Error while processing input. Closing.");
                     silentlyClose();
-                    return;
                 }
             }
         }
 
         private void processOpCode(OpCode opCode){
             System.out.println("Received: " + opCode);
-            switch (opCode){
-                case SUCCESS:
-                    System.out.println("Success");
-                    return;
-                case FAIL:
-                    processFail();
-                    return;
-                case GLOBAL_MESSAGE:
-                    processGlobalMessage();
-                    return;
-                case PERSONAL_MESSAGE:
-                    processPersonalMessage();
-                    return;
-                case PRIVATE_CONNECTION_SERVER_ESTABLISHMENT:
-                    processSuccessConnexion();
-                    return;
+            switch (opCode) {
+                case SUCCESS -> System.out.println("Success");
+                case FAIL -> processFail();
+                case GLOBAL_MESSAGE_SERVER -> processGlobalMessage();
+                case PERSONAL_MESSAGE -> processPersonalMessage();
+                case PRIVATE_CONNECTION_SERVER_ESTABLISHMENT -> processSuccessConnexion();
             }
         }
 
@@ -115,7 +106,7 @@ public class ChatOSClient {
                 ProcessStatus status = globalMessageReader.process(bbin);
                 switch (status) {
                     case DONE:
-                        GlobalMessage message = globalMessageReader.get();
+                        ServerGlobalMessage message = globalMessageReader.get();
                         System.out.println(message);
                         globalMessageReader.reset();
                         return;
