@@ -113,7 +113,7 @@ public class ChatOSServer {
                         }
                     }
                 }
-                case GLOBAL_MESSAGE_CLIENT -> {
+                case CLIENT_GLOBAL_MESSAGE -> {
                     for(;;){
                         Reader.ProcessStatus status = clientGlobalMessageReader.process(bbin);
                         switch (status) {

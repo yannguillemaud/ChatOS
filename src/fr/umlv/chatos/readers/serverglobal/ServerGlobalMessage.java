@@ -7,7 +7,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import static fr.umlv.chatos.readers.opcode.OpCode.GLOBAL_MESSAGE_SERVER;
+import static fr.umlv.chatos.readers.opcode.OpCode.SERVER_GLOBAL_MESSAGE;
 
 
 public class ServerGlobalMessage implements Sendable {
@@ -36,7 +36,7 @@ public class ServerGlobalMessage implements Sendable {
         int totalSize = Byte.BYTES + Integer.BYTES * 2 + loginSize + valueSize;
         if(totalSize <= maxBufferSize){
             return Optional.of(ByteBuffer.allocate(maxBufferSize)
-                    .put(GLOBAL_MESSAGE_SERVER.value())
+                    .put(SERVER_GLOBAL_MESSAGE.value())
                     .putInt(loginSize).put(encodedLogin)
                     .putInt(valueSize).put(encodedValue)
                     .flip()
@@ -51,7 +51,6 @@ public class ServerGlobalMessage implements Sendable {
     }
 
     public String getValue(){ return value; }
-
 
     public String getLogin() {
         return login;

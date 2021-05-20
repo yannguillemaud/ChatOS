@@ -1,4 +1,4 @@
-# CHATOS PROTOCOL 
+# CHATOS PROTOCOL
 
 ## Table of Contents
 1. Members
@@ -16,21 +16,19 @@
 ___
 
 ## 2. Summary
-ChatOS protocol is a student based protocol as part of ESIPE's network projet. 
-Protocol aim allows users connecting to a chat server in which no IP adresses are retained. 
-This RFC explains the protocol and its types of packets, its working and its client-side way of connection. 
-However because of currents few lack of acknoledges, some technical details will come later on. 
+ChatOS protocol is a student based protocol as part of ESIPE's network projet.
+Protocol aim allows users connecting to a chat server in which no IP adresses are retained.
+This RFC explains the protocol and its types of packets, its working and its client-side way of connection.
+However because of currents few lack of acknoledges, some technical details will come later on.
 Feel free to contact protocol's members in any questions you might have.
 ___
 
 ## 3. Design decisions
 - Each exchange start with an OPCode for its meaning, listed in section **# 7. Server Response** below.
 - The server does not retains any client informations except his pseudonym.
-- Clients pseudonyms must be unique and must not exceed 30 characters. Otherwise transfer initialization will be declined.
-- Clients requests and informations must be encoded with UTF8 charset. Otherwise unexpected behaviours might occur.  
-- This protocol uses three types of format in order to represent informations: byte for OPCode, int for encoded pseudonym size and long for encoded message size. 
-- In order to avoid infinite requests waitings on private connections, a 5 minutes timeout is sent for each request. After this delay the request will be automatically declined.
-- On the same way, private connections automatically closes after 5 minutes without message exchange.
+- Each of sent packet weight less than 1024 bytes. Otherwise packet will be declined.
+- Clients requests and informations must be encoded with UTF8 charset. Otherwise unexpected behaviours might occur.
+- This protocol uses three types of format in order to represent informations: byte for OpCodes or ErrorCodes, int for encoded pseudonym size and long for encoded message size.
 
 ___
 
@@ -59,8 +57,8 @@ Theses possibilities and their corresponding request format are explained below.
 #### Client request
 A client can send a message to all of connected clients on the server with the following format:
 - OPCode : 4 (byte)
-- Number of bytes encoding the message (long)
-- Encoded message 
+- Number of bytes encoding the message (int)
+- Encoded message
 
 #### Server Response
 No server response for this request
@@ -71,8 +69,8 @@ It will have the following format :
 - OPCode : 5 (byte)
 - Number of bytes encoding the sender's pseudonym (int)
 - Sender's pseudonym
-- Number of bytes encoding the message (long)
-- Endoded message 
+- Number of bytes encoding the message (int)
+- Endoded message
 
 
 ### _Specific user message_
@@ -81,9 +79,9 @@ It will have the following format :
 A client can send a message to a connected client on the server with the following format:
 - OPCode : 6 (byte)
 - Number of bytes encoding the other client's pseudonym (int)
-- Specified client's pseudonym encoded 
-- Number of bytes encoding the message (long)
-- Endoded message 
+- Specified client's pseudonym encoded
+- Number of bytes encoding the message (int)
+- Endoded message
 
 #### Server Response
 The server will respond to tell to the client if the addressee's pseudonym is linked to an existing connected client.
@@ -92,10 +90,10 @@ See server response explanation in section **# 6. Server Response** below.
 #### Server Message
 The message of the client will be sent to the specified connected client in a packet containing the sender pseudonym and the message.
 It will have the following format :
-- OPCode : 7 (byte)
-- Number of bytes encoding the sender's pseudonyme (long)
+- OPCode : 6 (byte)
+- Number of bytes encoding the sender's pseudonyme (int)
 - Sender's pseudonyme encoded
-- Number of bytes encoding the message (long)
+- Number of bytes encoding the message (int)
 - Endoded message
 
 
@@ -106,61 +104,57 @@ A client can send a message if he want to establish a private TCP connection.
 His initial request will only contain the pseudonym of the other user :
 
 It will have the following format :
-- OPCode : 8 (byte)
+- OPCode : 7 (byte)
 - Number of bytes encoding the addressee's pseudonyme (int)
-- Addressee's pseudonyme encoded 
+- Addressee's pseudonyme encoded
 
 #### Server Response
 The server will respond to tell to the seeker if the addressee's pseudonym is linked to an existing connected client and if he has accepted the private connection request.
 See server response explanation in section **# 6. Server Response** below.
 
-#### Server Request
+#### Server Acceptation Request
 If the addressee's pseudonym is valid and linked to a connected client, the server will send him a request to ask him if he accept the private connection request, with the following format :
-- OPCode : 9 (byte)
+- OPCode : 8 (byte)
 - Number of bytes encoding the seeker's pseudonyme (int)
 - Seeker's pseudonyme encoded
 
 #### Client Response
 The addressee can answer to a private connection request.
 His response will have the following format :
-- OPCode : 10 (byte)
+- OPCode : 9 (byte)
 - Number of bytes encoding the seeker's pseudonyme (int)
 - Seeker's pseudonyme encoded
-- Boolean corresponding to his response (True if he accept the private connection, else False) (boolean)
+- byte corresponding to his response (1 if he accept the private connection, else 0) (byte)
 
-Each private connection request is linked to a timeout. In the case this delay is exceeded, server will automatically decline the connection with an error code of 7. 
+Each private connection request is linked to a timeout. In the case this delay is exceeded, server will automatically decline the connection with an error code of 7.
 
-#### Server Message
-If the private connection request has been accepted, the server wil send to both clients a message containing a unique connection id that both client will have to use to establish the private connection (the id will be the same for both client but unique for this private connection).
+#### Server Establishment Message
+If the private connection request has been accepted, the server wil send to both clients a message containing a unique connection token that both client will have to use to establish the private connection (the token will be the same for both client but unique for this private connection).
 
 It will have the following format :
-- OPCode : 11 (byte)
-- Number of bytes in the other client pseudonym endcoded (int)
-- Other client's pseudonyme encoded 
-- Private connection Id (long)
+- OPCode : 10 (byte)
+- Number of bytes in the other client pseudonym encoded (int)
+- Other client's pseudonyme encoded
+- Number of bytes in the encoded token (int)
+- Encoded connection token
 
 #### Client Connection
 
-When the client have received a Private connection id, he will have to establish a new TCP connection with the server.
+When the client have received a Private connection token, he will have to establish a new TCP connection with the server.
 
 The connection request will have the following format :
-- OPCode : 12 (byte)
-- Private connection Id (long)
+- OPCode : 11 (byte)
+- Number of bytes in the encoded token (int)
+- Encoded connection token
 
 #### Server Response
 Once the server have accepted two connection with the same Private connection Id (and this id has been generated by the server), he will send a message to both client to tell them that the private connection has been established.
 See server response explanation in section **# 6. Server Response** below.
 
-
-#### Private connection behavior 
-Remplacer le truc en dessous par une traduction de ca imo :
-A partir de ce moment, la connexion privée est réputée établie: tous les octets écrits par un client sur l'une des connexions sont relayés par le serveur vers l'autre connexion. Lorsqu'un client ferme sa connexion en écriture, le serveur fait de même sur la connexion correspondante.
-
-
+#### Private connection behavior
 According to the main goal of ChatOS protocol, neither of the two clients will know the other IP address they're connected to.
 Each of them will connect to a specific socket and the server will transfer data through theses, allowing clients to talk like if there was an unique socket.
-Private connections are closed when one of the two clients decide to leave, or if no message has been sent from one of the two client from the last 5 minutes. 
-The server will send a message to prevent this closing.
+Private connections are closed when one of the two clients decide to leave.
 
 ___
 
@@ -171,27 +165,25 @@ The server response will have the following format :
 
 or
 - OPCode : 3 (byte) (FAILURE)
-- ErrorCode (int)
-(You can check every ErrorCode meaning in the part **#8. ErrorCodes** below)
+- ErrorCode (byte)
+  (You can check every ErrorCode meaning in the part **#8. ErrorCodes** below)
 
 ___
 
 ### 7. OPCodes
 OPCodes (Operation Codes) describe the operation to be performed.
-Each OPCode is represented in a byte. Parenthesis specifies the sender of the code, where S is for Server and C for client.
+Each OPCode is represented by a byte. Parenthesis specifies the sender of the code, where S is for Server and C for client.
 ChatOS protocol uses the following OPCodes:
 1. Initialization (C)
 2. Successful operation (S)
 3. Failed Operation (S)
 4. Global message (C)
 5. Global message (S)
-6. Specific user message (C)
-7. Specific user message (S)
+6. Personal message (C, S)
 8. Private connection request (C)
-9. Private connection request (S)
+9. Private connection acceptation request (S)
 10. Private connection response (C)
-11. Private connection establishment (S)
-12. Private connection establishment (C)
+11. Private connection establishment (S, C)
 
 ___
 
@@ -207,4 +199,3 @@ Each ErrorCode is also represented in byte format.
 - 5 : Message too long
 - 6 : Addressee's client refused the private connection
 - 7 : Addressee's client timed out to respond to the private connection
-- 8 : Private connection id invalid

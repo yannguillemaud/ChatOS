@@ -7,7 +7,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import static fr.umlv.chatos.readers.opcode.OpCode.PRIVATE_CONNECTION_REQUEST;
+import static fr.umlv.chatos.readers.opcode.OpCode.PRIVATE_CONNECTION_SERVER_ESTABLISHMENT;
 
 public class PrivateConnectionServerEstablishment implements Sendable {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
@@ -33,7 +33,7 @@ public class PrivateConnectionServerEstablishment implements Sendable {
         int totalSize = Byte.BYTES + Integer.BYTES * 2 + loginSize + tokenSize;
         if(totalSize <= maxBufferSize){
             return Optional.of(ByteBuffer.allocate(maxBufferSize)
-                    .put(PRIVATE_CONNECTION_REQUEST.value())
+                    .put(PRIVATE_CONNECTION_SERVER_ESTABLISHMENT.value())
                     .putInt(loginSize).put(encodedLogin)
                     .putInt(tokenSize).put(encodedToken)
                     .flip()

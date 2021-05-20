@@ -77,7 +77,7 @@ public class ChatOSClient {
             switch (opCode) {
                 case SUCCESS -> System.out.println("Success");
                 case FAIL -> processFail();
-                case GLOBAL_MESSAGE_SERVER -> processGlobalMessage();
+                case SERVER_GLOBAL_MESSAGE -> processGlobalMessage();
                 case PERSONAL_MESSAGE -> processPersonalMessage();
                 case PRIVATE_CONNECTION_SERVER_ESTABLISHMENT -> processSuccessConnexion();
             }
