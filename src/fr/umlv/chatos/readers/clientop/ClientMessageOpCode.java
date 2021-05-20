@@ -14,7 +14,7 @@ public enum ClientMessageOpCode {
     ClientMessageOpCode(final byte value) {
         this.value = value;
     }
-    public int value() {
+    public byte value() {
         return this.value;
     }
 

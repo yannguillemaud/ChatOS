@@ -9,8 +9,6 @@ import fr.umlv.chatos.readers.initialization.InitializationMessage;
 import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
-import fr.umlv.chatos.readers.serverop.ServerErrorCode;
-import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -69,6 +67,7 @@ public class ChatOSServer {
                                 InitializationMessage message = initializationMessageReader.get();
                                 String login = message.getLogin();
                                 ByteBuffer serverResponse;
+                                //problème ici, je corrige ca
                                 if (server.isLoginAvailable(login)) {
                                     serverResponse = acceptByteBuffer();
                                     this.login = login;
@@ -102,6 +101,7 @@ public class ChatOSServer {
                                     globalMessageReader.reset();
                                     break;
                                 }
+                                System.out.println("Global: " + value.get());
                                 server.broadcast(value.orElseThrow());
                                 globalMessageReader.reset();
                             }
@@ -129,7 +129,7 @@ public class ChatOSServer {
                                     personalMessageReader.reset();
                                     break;
                                 }
-                                server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow());
+                                server.sendPersonalMessage(value.getTo(), valueByteBuffer.orElseThrow());
                                 personalMessageReader.reset();
                             }
                             case REFILL -> {
@@ -290,11 +290,6 @@ public class ChatOSServer {
         public boolean isInitialized() {
             return login != null;
         }
-
-        public String login() {
-            return login;
-        }
-
     }
 
     static private int STRING_SIZE = 1_024;
@@ -373,7 +368,7 @@ public class ChatOSServer {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
                 System.out.println("Login: " + context.login);
-                if (context.isInitialized() && context.login().equals(login)) {
+                if (context.isInitialized() && context.login.equals(login)) {
                     return false;
                 }
             }
@@ -387,7 +382,7 @@ public class ChatOSServer {
         for (SelectionKey selectionKey : selector.keys()) {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
-                if (context.isInitialized() && context.login().equals(login)) {
+                if (context.isInitialized() && context.login.equals(login)) {
                     context.queueMessage(buffMsg);
                     return;
                 }
@@ -404,7 +399,9 @@ public class ChatOSServer {
         selector.keys().forEach(selectionKey -> {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
-                context.queueMessage(buffMsg);
+                if(context.isInitialized()) {
+                    context.queueMessage(buffMsg);
+                }
             }
         });
     }

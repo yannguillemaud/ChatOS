@@ -1,20 +1,24 @@
 package fr.umlv.chatos.readers.global;
 
+import fr.umlv.chatos.Sendable;
 import fr.umlv.chatos.readers.clientop.ClientMessageOpCode;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.Optional;
 
-import static fr.umlv.chatos.readers.serverop.ServerMessageOpCode.GLOBAL_MESSAGE;
+import static java.util.Objects.requireNonNull;
 
-public class GlobalMessage {
+public class GlobalMessage implements Sendable {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
+    private final String from;
     private final String value;
 
-    public GlobalMessage(String value){
-        this.value = value;
+    public GlobalMessage(String from, String value){
+        this.from = requireNonNull(from);
+        this.value = requireNonNull(value);
     }
 
     /**
@@ -24,12 +28,15 @@ public class GlobalMessage {
      * @return An optional containing the message if it has enough space, otherwise an empty one
      */
     public Optional<ByteBuffer> toByteBuffer(int maxBufferSize) {
+        ByteBuffer encodedLogin = UTF8.encode(from);
         ByteBuffer encodedValue = UTF8.encode(value);
+        int loginSize = encodedLogin.remaining();
         int valueSize = encodedValue.remaining();
-        int totalSize = Integer.BYTES + valueSize;
+        int totalSize = Byte.BYTES + Integer.BYTES * 2  + loginSize + valueSize;
         if(totalSize <= maxBufferSize){
             return Optional.of(ByteBuffer.allocate(maxBufferSize)
-                    .put(GLOBAL_MESSAGE.value())
+                    .put(ClientMessageOpCode.GLOBAL_MESSAGE.value())
+                    .putInt(loginSize).put(encodedLogin)
                     .putInt(valueSize).put(encodedValue)
                     .flip()
             );
@@ -38,8 +45,9 @@ public class GlobalMessage {
 
     @Override
     public String toString() {
-        return "Global Message: " + value;
+        return "Global from " + from + ": " + value;
     }
 
+    public String getFrom(){ return from; }
     public String getValue(){ return value; }
 }

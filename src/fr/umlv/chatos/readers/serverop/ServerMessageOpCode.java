@@ -5,10 +5,10 @@ import java.util.Optional;
 public enum ServerMessageOpCode {
     SUCCESS((byte) 2),
     FAIL((byte) 3),
-    GLOBAL_MESSAGE((byte) 5),
-    PERSONAL_MESSAGE((byte) 7),
-    PRIVATE_CONNECTION_REQUEST((byte) 9),
-    PRIVATE_CONNECTION_ESTABLISHMENT((byte) 11);
+    GLOBAL_MESSAGE((byte) 4),
+    PERSONAL_MESSAGE((byte) 5),
+    PRIVATE_CONNECTION_REQUEST((byte) 6),
+    PRIVATE_CONNECTION_ESTABLISHMENT((byte) 7);
 
     private final byte value;
     ServerMessageOpCode(final byte value) {
