@@ -1,13 +1,11 @@
 package fr.umlv.chatos.readers.personal;
 
-import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
-
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import static fr.umlv.chatos.readers.serverop.ServerMessageOpCode.PERSONAL_MESSAGE;
+import static fr.umlv.chatos.readers.servererrorcode.ServerMessageOpCode.PERSONAL_MESSAGE;
 
 public class PersonalMessage {
     private static final Charset UTF8 = StandardCharsets.UTF_8;

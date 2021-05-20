@@ -7,7 +7,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import static fr.umlv.chatos.readers.serverop.ServerMessageOpCode.GLOBAL_MESSAGE;
+import static fr.umlv.chatos.readers.servererrorcode.ServerMessageOpCode.GLOBAL_MESSAGE;
 
 public class GlobalMessage {
     private static final Charset UTF8 = StandardCharsets.UTF_8;

@@ -1,4 +1,4 @@
-package fr.umlv.chatos.readers.serverop;
+package fr.umlv.chatos.readers.servererrorcode;
 
 import java.util.Optional;
 

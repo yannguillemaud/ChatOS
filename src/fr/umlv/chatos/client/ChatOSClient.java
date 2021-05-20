@@ -4,14 +4,12 @@ import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.Reader.ProcessStatus;
 import fr.umlv.chatos.readers.global.GlobalMessage;
 import fr.umlv.chatos.readers.global.GlobalMessageReader;
-import fr.umlv.chatos.readers.initialization.InitializationMessage;
-import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
+import fr.umlv.chatos.readers.opcode.OpCode;
+import fr.umlv.chatos.readers.opcode.OpCodeReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
-import fr.umlv.chatos.readers.serverop.ServerErrorCode;
-import fr.umlv.chatos.readers.serverop.ServerErrorReader;
-import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
-import fr.umlv.chatos.readers.serverop.ServerOpReader;
+import fr.umlv.chatos.readers.servererrorcode.ServerErrorCode;
+import fr.umlv.chatos.readers.servererrorcode.ServerErrorReader;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -21,7 +19,6 @@ import java.nio.channels.Channel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.rmi.ServerError;
 import java.util.LinkedList;
 import java.util.Optional;
 import java.util.Queue;
@@ -40,7 +37,7 @@ public class ChatOSClient {
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
         final private Queue<ByteBuffer> queue = new LinkedList<>(); // buffers read-mode
 
-        final private Reader<ServerMessageOpCode> serverOpReader = new ServerOpReader();
+        final private Reader<OpCode> serverOpReader = new OpCodeReader();
         final private Reader<ServerErrorCode> serverErrorReader = new ServerErrorReader();
         final private Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
         final private Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
@@ -62,7 +59,7 @@ public class ChatOSClient {
             ProcessStatus status = serverOpReader.process(bbin);
             switch(status){
                 case DONE:
-                    ServerMessageOpCode opCode = serverOpReader.get();
+                    OpCode opCode = serverOpReader.get();
                     logger.info("Received opcode: " + opCode);
                     processOpCode(opCode);
                     serverOpReader.reset();
@@ -77,11 +74,14 @@ public class ChatOSClient {
             }
         }
 
-        private void processOpCode(ServerMessageOpCode opCode){
+        private void processOpCode(OpCode opCode){
             System.out.println("Received: " + opCode);
             switch (opCode){
                 case SUCCESS:
                     System.out.println("Success");
+                    return;
+                case FAIL:
+                    processFail();
                     return;
                 case GLOBAL_MESSAGE:
                     processGlobalMessage();
@@ -89,11 +89,8 @@ public class ChatOSClient {
                 case PERSONAL_MESSAGE:
                     processPersonalMessage();
                     return;
-                case PRIVATE_CONNECTION_ESTABLISHMENT:
+                case PRIVATE_CONNECTION_SERVER_ESTABLISHMENT:
                     processSuccessConnexion();
-                    return;
-                case FAIL:
-                    processFail();
                     return;
             }
         }

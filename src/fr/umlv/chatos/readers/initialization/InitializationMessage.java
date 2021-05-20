@@ -1,16 +1,12 @@
 package fr.umlv.chatos.readers.initialization;
 
-import fr.umlv.chatos.readers.personal.PersonalMessage;
-import fr.umlv.chatos.readers.serverop.ServerErrorCode;
-import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
-import fr.umlv.chatos.server.ChatOSServer;
+import fr.umlv.chatos.readers.servererrorcode.ServerErrorCode;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 
-import static fr.umlv.chatos.readers.serverop.ServerMessageOpCode.SUCCESS;
+import static fr.umlv.chatos.readers.servererrorcode.ServerMessageOpCode.SUCCESS;
 
 public class InitializationMessage {
     private static final Charset UTF8 = StandardCharsets.UTF_8;

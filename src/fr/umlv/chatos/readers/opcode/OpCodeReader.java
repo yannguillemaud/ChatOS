@@ -1,15 +1,15 @@
-package fr.umlv.chatos.readers.serverop;
+package fr.umlv.chatos.readers.opcode;
 
 import fr.umlv.chatos.readers.ByteReader;
 import fr.umlv.chatos.readers.Reader;
 
 import java.nio.ByteBuffer;
 
-public class ServerOpReader implements Reader<ServerMessageOpCode> {
+public class OpCodeReader implements Reader<OpCode> {
 
     private final ByteReader byteReader = new ByteReader();
     private ProcessStatus state = ProcessStatus.REFILL;
-    private ServerMessageOpCode opCode = null;
+    private OpCode opCode = null;
 
 
     @Override
@@ -20,7 +20,7 @@ public class ServerOpReader implements Reader<ServerMessageOpCode> {
 
         state = byteReader.process(bb);
         if (state == ProcessStatus.DONE) {
-            var optionalOpCode = ServerMessageOpCode.serverMessageOpCode(byteReader.get());
+            var optionalOpCode = OpCode.opCode(byteReader.get());
             if (optionalOpCode.isEmpty()) {
                 state = ProcessStatus.ERROR;
             } else {
@@ -32,7 +32,7 @@ public class ServerOpReader implements Reader<ServerMessageOpCode> {
     }
 
     @Override
-    public ServerMessageOpCode get() {
+    public OpCode get() {
         if (state!= ProcessStatus.DONE) {
             throw new IllegalStateException();
         }

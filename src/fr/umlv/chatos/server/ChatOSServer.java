@@ -1,16 +1,14 @@
 package fr.umlv.chatos.server;
 
-import fr.umlv.chatos.readers.clientop.ClientMessageOpCode;
-import fr.umlv.chatos.readers.*;
-import fr.umlv.chatos.readers.clientop.ClientOpReader;
+import fr.umlv.chatos.readers.Reader;
+import fr.umlv.chatos.readers.opcode.OpCode;
+import fr.umlv.chatos.readers.opcode.OpCodeReader;
 import fr.umlv.chatos.readers.global.GlobalMessage;
 import fr.umlv.chatos.readers.global.GlobalMessageReader;
 import fr.umlv.chatos.readers.initialization.InitializationMessage;
 import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
-import fr.umlv.chatos.readers.serverop.ServerErrorCode;
-import fr.umlv.chatos.readers.serverop.ServerMessageOpCode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -25,7 +23,7 @@ import java.util.logging.Logger;
 
 import static fr.umlv.chatos.readers.initialization.InitializationMessage.*;
 import static fr.umlv.chatos.readers.initialization.InitializationMessage.acceptByteBuffer;
-import static fr.umlv.chatos.readers.serverop.ServerErrorCode.ALREADY_USED;
+import static fr.umlv.chatos.readers.servererrorcode.ServerErrorCode.ALREADY_USED;
 
 public class ChatOSServer {
 
@@ -42,11 +40,11 @@ public class ChatOSServer {
         final private ChatOSServer server;
         private boolean closed = false;
 
-        private final Reader<ClientMessageOpCode> opReader = new ClientOpReader();
+        private final Reader<OpCode> opReader = new OpCodeReader();
         private final Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
         private final Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
         private final Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
-        private ClientMessageOpCode opCode = null;
+        private OpCode opCode = null;
         private String login = null;
 
 
@@ -297,8 +295,8 @@ public class ChatOSServer {
 
     }
 
-    static private int STRING_SIZE = 1_024;
-    static private Logger logger = Logger.getLogger(ChatOSServer.class.getName());
+    static private final int STRING_SIZE = 1_024;
+    static private final Logger logger = Logger.getLogger(ChatOSServer.class.getName());
 
     private final ServerSocketChannel serverSocketChannel;
     private final Selector selector;
