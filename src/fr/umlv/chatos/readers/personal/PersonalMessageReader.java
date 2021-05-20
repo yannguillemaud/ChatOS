@@ -13,18 +13,28 @@ public class PersonalMessageReader implements Reader<PersonalMessage> {
 
     private State state = State.WAITING;
     private PersonalMessage personalMessage;
-    private String login;
+    private String from;
+    private String to;
 
     @Override
     public ProcessStatus process(ByteBuffer bb) {
         if(state == State.DONE || state == State.ERROR) throw new IllegalStateException();
 
-        if(login == null) {
+        if(from == null) {
             var loginReaderStatus = stringReader.process(bb);
             if (loginReaderStatus != ProcessStatus.DONE) {
                 return loginReaderStatus;
             }
-            this.login = stringReader.get();
+            this.from = stringReader.get();
+            stringReader.reset();
+        }
+
+        if(to == null) {
+            var loginReaderStatus = stringReader.process(bb);
+            if (loginReaderStatus != ProcessStatus.DONE) {
+                return loginReaderStatus;
+            }
+            this.from = stringReader.get();
             stringReader.reset();
         }
 
@@ -35,7 +45,7 @@ public class PersonalMessageReader implements Reader<PersonalMessage> {
         String value = stringReader.get();
         stringReader.reset();
 
-        personalMessage = new PersonalMessage(login, value);
+        personalMessage = new PersonalMessage(from, to, value);
         state = State.DONE;
         return ProcessStatus.DONE;
     }
@@ -51,7 +61,8 @@ public class PersonalMessageReader implements Reader<PersonalMessage> {
     @Override
     public void reset() {
         personalMessage = null;
-        login = null;
+        from = null;
+        to = null;
         stringReader.reset();
         state = State.WAITING;
     }

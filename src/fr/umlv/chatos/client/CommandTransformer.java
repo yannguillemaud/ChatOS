@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import static fr.umlv.chatos.readers.clientop.ClientMessageOpCode.GLOBAL_MESSAGE;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -23,7 +24,7 @@ public class CommandTransformer {
     private static final Charset charset = StandardCharsets.UTF_8;
     private static final Logger logger = Logger.getLogger(CommandTransformer.class.getName());
 
-    private CommandTransformer(){}
+    private String linkedLogin;
 
     private static void initMessageUsage(){
         System.out.println("Server connexion request: INIT login");
@@ -56,7 +57,7 @@ public class CommandTransformer {
      * @return Optional of bytebuffer containing the message according to Chatos protocol's format,
      * empty if it's size > BUFFER_SIZE [ 1.0: 1024 ]
      */
-    public static Optional<ByteBuffer> asByteBuffer(String commandString){
+    public Optional<ByteBuffer> asByteBuffer(String commandString){
         requireNonNull(commandString);
         String[] tokens = commandString.split(" ");
         if(tokens.length < 2) return Optional.empty();
@@ -68,10 +69,17 @@ public class CommandTransformer {
      * @param tokens
      * @return
      */
-    private static Optional<ByteBuffer> transformCommand(String[] tokens){
+    private Optional<ByteBuffer> transformCommand(String[] tokens){
         String command = tokens[0];
+        if(command.equals("INIT")) return initToBB(tokens);
+
+        if(linkedLogin == null){
+            System.out.println("Not initialized yet");
+            initMessageUsage();
+            return Optional.empty();
+        }
+
         switch(command){
-            case "INIT" : return initToBB(tokens);
             case "GLOBAL" : return globalToBB(tokens);
             case "PRIVATEMSG" : return privateMsgToBB(tokens);
             case "PRIVATE" : return connexionRqtToBB(tokens);
@@ -88,7 +96,7 @@ public class CommandTransformer {
      * @return Optional of bytebuffer, containing ChatOs initialization bytebuffer
      * returns an Optional.empty if the buffer size is > 1024
      */
-    private static Optional<ByteBuffer> initToBB(String[] tokens){
+    private Optional<ByteBuffer> initToBB(String[] tokens){
         if(tokens.length != 2) {
             initMessageUsage();
             return Optional.empty();
@@ -96,22 +104,12 @@ public class CommandTransformer {
 
         byte opCode = OpCode.INITIALIZATION.value();
         String login = tokens[1];
-        ByteBuffer encodedLogin = charset.encode(login);
-        int loginSize = encodedLogin.remaining();
-
-        //Calcul de la place nécessaire
-        int packetSize = Byte.BYTES + Integer.BYTES + loginSize;
-        if(packetSize > BUFFER_SIZE){
-            System.out.println("Login is too long");
-            return Optional.empty();
+        Optional<ByteBuffer> initBuffer = new InitializationMessage(login).toByteBuffer(BUFFER_SIZE);
+        if(initBuffer.isPresent()){
+            logger.info("Correct init packet from " + login);
+            this.linkedLogin = login;
         }
-        ByteBuffer initBuffer = ByteBuffer.allocate(BUFFER_SIZE)
-                .put(opCode)
-                .putInt(loginSize).put(encodedLogin)
-                .flip();
-
-        logger.info("Correct init packet from " + login);
-        return Optional.of(initBuffer);
+        return initBuffer;
     }
 
     /**
@@ -120,7 +118,7 @@ public class CommandTransformer {
      * @return Optional of bytebuffer, containing ChatOs global message bytebuffer
      * returns an Optional.empty if the buffer size is > 1024
      */
-    private static Optional<ByteBuffer> globalToBB(String[] tokens){
+    private Optional<ByteBuffer> globalToBB(String[] tokens){
         if(tokens.length < 2) {
             globalMessageUsage();
             return Optional.empty();
@@ -129,22 +127,13 @@ public class CommandTransformer {
         byte opCode = OpCode.GLOBAL_MESSAGE.value();
         String message = Arrays.stream(tokens, 1, tokens.length)
                 .collect(Collectors.joining(" "));
-        logger.info("Created global : " + message);
-        ByteBuffer encodedMessage = charset.encode(message);
-        int messageSize = encodedMessage.remaining();
 
-        int packetSize = Byte.BYTES + Integer.BYTES + messageSize;
-        if(packetSize > BUFFER_SIZE){
-            System.out.println("Message is too long");
-            return Optional.empty();
+        GlobalMessage globalMessage = new GlobalMessage(linkedLogin, message);
+        Optional<ByteBuffer> optional = globalMessage.toByteBuffer(BUFFER_SIZE);
+        if(optional.isEmpty()){
+            System.out.println("Message too long");
         }
-
-        logger.info("Correct global message packet: " + message);
-        var messageBuffer = ByteBuffer.allocate(BUFFER_SIZE)
-                .put(opCode)
-                .putInt(messageSize).put(encodedMessage)
-                .flip();
-        return Optional.of(messageBuffer);
+        return optional;
     }
 
     /**
@@ -154,7 +143,7 @@ public class CommandTransformer {
      * @return Optional of bytebuffer, containing ChatOs private message bytebuffer
      * returns an Optional.empty if the buffer size is > 1024
      */
-    private static Optional<ByteBuffer> privateMsgToBB(String[] tokens){
+    private Optional<ByteBuffer> privateMsgToBB(String[] tokens){
         if(tokens.length < 3) {
             globalMessageUsage();
             return Optional.empty();
@@ -164,25 +153,13 @@ public class CommandTransformer {
         String adresseLogin = tokens[1];
         ByteBuffer encodedLogin = charset.encode(adresseLogin);
         int loginSize = encodedLogin.remaining();
-
         String message = Arrays.stream(tokens, 2, tokens.length)
                 .collect(Collectors.joining(" "));
-        ByteBuffer encodedMessage = charset.encode(message);
-        int messageSize = encodedMessage.remaining();
-
-        int totalSize = (Byte.SIZE + Integer.BYTES * 2 + loginSize + messageSize);
-        if(totalSize > BUFFER_SIZE){
-            System.out.println("Message is too long");
-            return Optional.empty();
+        Optional<ByteBuffer> optional = new PersonalMessage(linkedLogin, to, message).toByteBuffer(BUFFER_SIZE);
+        if(optional.isEmpty()){
+            System.out.println("Message too long");
         }
-
-        System.out.println("Correct private message packet to: " + adresseLogin);
-        ByteBuffer messageBuffer = ByteBuffer.allocate(BUFFER_SIZE)
-                .put(opCode)
-                .putInt(loginSize).put(encodedLogin)
-                .putInt(messageSize).put(encodedMessage)
-                .flip();
-        return Optional.of(messageBuffer);
+        return optional;
     }
 
 
@@ -192,7 +169,7 @@ public class CommandTransformer {
      * @return Optional of bytebuffer, containing ChatOs private connexion request bytebuffer
      * returns an Optional.empty if the buffer size is > 1024
      */
-    private static Optional<ByteBuffer> connexionRqtToBB(String[] tokens){
+    private Optional<ByteBuffer> connexionRqtToBB(String[] tokens){
         if(tokens.length != 2){
             connexionRequestUsage();
             return Optional.empty();

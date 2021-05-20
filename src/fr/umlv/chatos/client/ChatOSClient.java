@@ -26,8 +26,6 @@ import java.util.Scanner;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.logging.Logger;
 
-import static fr.umlv.chatos.client.CommandTransformer.asByteBuffer;
-
 public class ChatOSClient {
     static private class Context {
 
@@ -64,10 +62,9 @@ public class ChatOSClient {
                     processOpCode(opCode);
                     serverOpReader.reset();
                 case REFILL:
-                    System.out.println("Refill processIn");
                     return;
                 case ERROR: {
-                    System.out.println("Error processIn");
+                    System.out.println("Error while processing input. Closing.");
                     silentlyClose();
                     return;
                 }
@@ -106,7 +103,7 @@ public class ChatOSClient {
                         return;
                     case REFILL: continue;
                     case ERROR:
-                        logger.severe("ErrorStatus. Closing.");
+                        logger.severe("Error while receiving failure. Closing.");
                         silentlyClose();
                         return;
                 }
@@ -125,7 +122,7 @@ public class ChatOSClient {
                     case REFILL:
                         continue;
                     case ERROR: {
-                        logger.severe("ErrorStatus. Closing.");
+                        logger.severe("Error while receiving global message. Closing.");
                         silentlyClose();
                         return;
                     }
@@ -138,16 +135,14 @@ public class ChatOSClient {
                 ProcessStatus status = personalMessageReader.process(bbin);
                 switch (status) {
                     case DONE:
-                        System.out.println("DONE perso");
                         PersonalMessage message = personalMessageReader.get();
                         System.out.println(message);
                         personalMessageReader.reset();
                         return;
                     case REFILL:
-                        System.out.println("REFILL perso");
                         continue;
                     case ERROR: {
-                        logger.severe("ErrorStatus. Closing.");
+                        logger.severe("Error while receiving personnal message. Closing.");
                         silentlyClose();
                         return;
                     }
@@ -268,14 +263,13 @@ public class ChatOSClient {
     private final SocketChannel sc;
     private final Selector selector;
     private final InetSocketAddress serverAddress;
-    private final String login;
     private final Thread console;
+    final private CommandTransformer commandTransformer = new CommandTransformer();
     private final ArrayBlockingQueue<String> commandQueue = new ArrayBlockingQueue<>(10);
     private Context uniqueContext;
 
-    public ChatOSClient(String login, InetSocketAddress serverAddress) throws IOException {
+    public ChatOSClient(InetSocketAddress serverAddress) throws IOException {
         this.serverAddress = serverAddress;
-        this.login = login;
         this.sc = SocketChannel.open();
         this.selector = Selector.open();
         this.console = new Thread(this::consoleRun);
@@ -317,7 +311,7 @@ public class ChatOSClient {
         synchronized (commandQueue){
             while(!commandQueue.isEmpty()){
                 String commandLine = commandQueue.poll();
-                Optional<ByteBuffer> optional = asByteBuffer(commandLine);
+                Optional<ByteBuffer> optional = commandTransformer.asByteBuffer(commandLine);
                 if(optional.isEmpty()) {
                     System.out.println("Could not process: " + commandLine);
                     continue;
@@ -388,17 +382,17 @@ public class ChatOSClient {
      * @throws IOException
      */
     public static void main(String[] args) throws NumberFormatException, IOException {
-        if (args.length!=3){
+        if (args.length!=2){
             usage();
             return;
         }
-        new ChatOSClient(args[0],new InetSocketAddress(args[1],Integer.parseInt(args[2]))).launch();
+        new ChatOSClient(new InetSocketAddress(args[0],Integer.parseInt(args[1]))).launch();
     }
 
     /**
      * Defines how to launch client
      */
     private static void usage(){
-        System.out.println("Usage : ChatOsClient login hostname port");
+        System.out.println("Usage : ChatOsClient hostname port");
     }
 }

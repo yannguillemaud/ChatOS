@@ -90,6 +90,7 @@ public class ChatOSServer {
                                 ByteBuffer serverResponse;
                                 if (server.isLoginAvailable(login)) {
                                     serverResponse = acceptByteBuffer();
+                                    logger.info("Set " + login + " to " + sc);
                                     this.login = login;
                                 } else {
                                     serverResponse = failureByteBuffer(ALREADY_USED);
@@ -344,11 +345,6 @@ public class ChatOSServer {
         public boolean isInitialized() {
             return login != null;
         }
-
-        public String login() {
-            return login;
-        }
-
     }
 
     static private final int STRING_SIZE = 1_024;
@@ -426,8 +422,8 @@ public class ChatOSServer {
         for (SelectionKey selectionKey : selector.keys()) {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
-                System.out.println("Login: " + context.login);
-                if (context.isInitialized() && context.login().equals(login)) {
+                if(context.isInitialized()) System.out.println("Found: " + context.login);
+                if (context.isInitialized() && context.login.equals(login)) {
                     return false;
                 }
             }
@@ -441,7 +437,7 @@ public class ChatOSServer {
         for (SelectionKey selectionKey : selector.keys()) {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
-                if (context.isInitialized() && context.login().equals(login)) {
+                if (context.isInitialized() && context.login.equals(login)) {
                     context.queueMessage(buffMsg);
                     return;
                 }
@@ -458,7 +454,10 @@ public class ChatOSServer {
         selector.keys().forEach(selectionKey -> {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
-                context.queueMessage(buffMsg);
+                if(context.isInitialized()) {
+                    System.out.println("Sending: " + buffMsg + " to " + context.login);
+                    context.queueMessage(buffMsg);
+                }
             }
         });
     }

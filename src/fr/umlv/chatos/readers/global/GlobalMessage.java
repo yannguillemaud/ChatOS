@@ -1,14 +1,18 @@
 package fr.umlv.chatos.readers.global;
 
+import fr.umlv.chatos.Sendable;
+import fr.umlv.chatos.readers.clientop.ClientMessageOpCode;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.Optional;
 
 import static fr.umlv.chatos.readers.opcode.OpCode.GLOBAL_MESSAGE;
 
-public class GlobalMessage {
+public class GlobalMessage implements Sendable {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
+    private final String from;
     private final String value;
     private final String author;
 
@@ -29,7 +33,9 @@ public class GlobalMessage {
      * @return An optional containing the message if it has enough space, otherwise an empty one
      */
     public Optional<ByteBuffer> toByteBuffer(int maxBufferSize) {
+        ByteBuffer encodedLogin = UTF8.encode(from);
         ByteBuffer encodedValue = UTF8.encode(value);
+        int loginSize = encodedLogin.remaining();
         int valueSize = encodedValue.remaining();
         if (author == null) {
             int totalSize = Byte.BYTES + Integer.BYTES + valueSize;
