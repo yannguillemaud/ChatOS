@@ -1,6 +1,6 @@
 package fr.umlv.chatos.readers.personal;
 
-import fr.umlv.chatos.Sendable;
+import fr.umlv.chatos.readers.Sendable;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;

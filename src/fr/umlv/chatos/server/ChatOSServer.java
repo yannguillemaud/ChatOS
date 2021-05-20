@@ -1,6 +1,7 @@
 package fr.umlv.chatos.server;
 
 import fr.umlv.chatos.readers.Reader;
+import fr.umlv.chatos.readers.Sendable;
 import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessage;
 import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessageReader;
 import fr.umlv.chatos.readers.opcode.OpCode;
@@ -40,7 +41,7 @@ public class ChatOSServer {
         private final int BUFFER_SIZE = 1024;
         final private ByteBuffer bbin = ByteBuffer.allocate(BUFFER_SIZE);
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
-        final private Queue<ByteBuffer> queue = new LinkedList<>();
+        final private Queue<Sendable> queue = new LinkedList<>();
         final private ChatOSServer server;
         private boolean closed = false;
 
@@ -62,17 +63,20 @@ public class ChatOSServer {
         }
 
 
-        public static ByteBuffer acceptByteBuffer() {
-            return ByteBuffer.allocate(Byte.BYTES)
+        public static Sendable acceptByteBuffer() {
+            return maxBufferSize -> Optional.of(
+                    ByteBuffer.allocate(Byte.BYTES)
                     .put(SUCCESS.value())
-                    .flip();
+                    .flip()
+            );
         }
 
-        public static ByteBuffer failureByteBuffer(ServerErrorCode errorCode){
-            return ByteBuffer.allocate(Byte.BYTES * 2)
+        public static Sendable failureByteBuffer(ServerErrorCode errorCode){
+            return maxBufferSize -> Optional.of(ByteBuffer.allocate(Byte.BYTES * 2)
                     .put(FAIL.value())
                     .put(errorCode.value())
-                    .flip();
+                    .flip()
+            );
         }
 
         private void processIn() {
@@ -86,7 +90,7 @@ public class ChatOSServer {
                                 opCode = null;
                                 InitializationMessage message = initializationMessageReader.get();
                                 String login = message.getLogin();
-                                ByteBuffer serverResponse;
+                                Sendable serverResponse;
                                 if (server.isLoginAvailable(login)) {
                                     serverResponse = acceptByteBuffer();
                                     logger.info("Set " + login + " to " + sc);
@@ -123,7 +127,7 @@ public class ChatOSServer {
                                     clientGlobalMessageReader.reset();
                                     break;
                                 }
-                                server.broadcast(globalMessageToSendByteBuffer.orElseThrow());
+                                server.broadcast(globalMessageToSend);
                                 clientGlobalMessageReader.reset();
                             }
                             case REFILL -> {
@@ -151,7 +155,7 @@ public class ChatOSServer {
                                     personalMessageReader.reset();
                                     break;
                                 }
-                                server.sendPersonalMessage(personalMessage.getLogin(), personalMessageToSendByteBuffer.orElseThrow());
+                                server.sendPersonalMessage(personalMessage.getLogin(), personalMessageToSend);
                                 personalMessageReader.reset();
                             }
                             case REFILL -> {
@@ -167,31 +171,32 @@ public class ChatOSServer {
                     }
                 }
                 case PRIVATE_CONNECTION_REQUEST -> {
-                    for(;;){
-                        Reader.ProcessStatus status = privateConnectionRequestReader.process(bbin);
-                        switch (status) {
-                            case DONE -> {
-                                opCode = null;
-                                var value = privateConnectionRequestReader.get();
-                                var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
-                                if (valueByteBuffer.isEmpty()) {
-                                    privateConnectionRequestReader.reset();
-                                    break;
-                                }
-                                server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow());
-                                privateConnectionRequestReader.reset();
-                            }
-                            case REFILL -> {
-                                System.out.println("REFILL perso");
-                                return;
-                            }
-                            case ERROR -> {
-                                System.out.println("CLOSE");
-                                silentlyClose();
-                                return;
-                            }
-                        }
-                    }
+//                    for(;;){
+//                        Reader.ProcessStatus status = privateConnectionRequestReader.process(bbin);
+//                        switch (status) {
+//                            case DONE -> {
+//                                opCode = null;
+//                                var privateConnectionRequest = privateConnectionRequestReader.get();
+//
+//                                var privateConnectionRequestByteBuffer = privateConnectionRequest.toByteBuffer(BUFFER_SIZE);
+//                                if (privateConnectionRequestByteBuffer.isEmpty()) {
+//                                    privateConnectionRequestReader.reset();
+//                                    break;
+//                                }
+//                                server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow());
+//                                privateConnectionRequestReader.reset();
+//                            }
+//                            case REFILL -> {
+//                                System.out.println("REFILL perso");
+//                                return;
+//                            }
+//                            case ERROR -> {
+//                                System.out.println("CLOSE");
+//                                silentlyClose();
+//                                return;
+//                            }
+//                        }
+//                    }
                 }
                 case PRIVATE_CONNECTION_RESPONSE -> {
 
@@ -249,10 +254,10 @@ public class ChatOSServer {
         /**
          * Add a message to the message queue, tries to fill bbOut and updateInterestOps
          *
-         * @param buffMsg
+         * @param sendable
          */
-        private void queueMessage(ByteBuffer buffMsg) {
-            queue.add(buffMsg);
+        private void queueMessage(Sendable sendable) {
+            queue.add(sendable);
 
             processOut();
             updateInterestOps();
@@ -263,13 +268,16 @@ public class ChatOSServer {
          */
         private void processOut() {
             while (!queue.isEmpty() && bbout.remaining() > Integer.BYTES){
-                var notRemovedBuffMsg = queue.peek();
+                var sendable = queue.peek();
+                var sendableByteBuffer = sendable.toByteBuffer(BUFFER_SIZE);
 
-                if(bbout.remaining() < notRemovedBuffMsg.remaining()) {
+
+
+                if(sendableByteBuffer.isEmpty() || bbout.remaining() < sendableByteBuffer.orElseThrow().remaining()) {
                     return;
                 }
 
-                bbout.put(notRemovedBuffMsg);
+                bbout.put(sendableByteBuffer.orElseThrow());
                 queue.remove();
             }
         }
@@ -431,13 +439,13 @@ public class ChatOSServer {
     }
 
 
-    private void sendPersonalMessage(String login, ByteBuffer buffMsg) {
-        logger.info("Sending " + buffMsg + " to " + login);
+    private void sendPersonalMessage(String login, PersonalMessage personalMessage) {
+        logger.info("Sending " + personalMessage.getValue() + " to " + login);
         for (SelectionKey selectionKey : selector.keys()) {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
                 if (context.isInitialized() && context.login.equals(login)) {
-                    context.queueMessage(buffMsg);
+                    context.queueMessage(personalMessage);
                     return;
                 }
             }
@@ -447,15 +455,15 @@ public class ChatOSServer {
     /**
      * Add a message to all connected clients queue
      *
-     * @param buffMsg
+     * @param serverGlobalMessage
      */
-    private void broadcast(ByteBuffer buffMsg) {
+    private void broadcast(ServerGlobalMessage serverGlobalMessage) {
         selector.keys().forEach(selectionKey -> {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
                 if(context.isInitialized()) {
-                    System.out.println("Sending: " + buffMsg + " to " + context.login);
-                    context.queueMessage(buffMsg);
+                    System.out.println("Sending: " + serverGlobalMessage.getValue() + " to " + context.login);
+                    context.queueMessage(serverGlobalMessage);
                 }
             }
         });
