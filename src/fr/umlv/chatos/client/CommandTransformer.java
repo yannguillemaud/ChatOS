@@ -1,12 +1,11 @@
 package fr.umlv.chatos.client;
 
-import fr.umlv.chatos.readers.clientop.ClientMessageOpCode;
+import fr.umlv.chatos.readers.opcode.OpCode;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -95,7 +94,7 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
-        byte opCode = (byte) ClientMessageOpCode.INITIALIZATION.value();
+        byte opCode = OpCode.INITIALIZATION.value();
         String login = tokens[1];
         ByteBuffer encodedLogin = charset.encode(login);
         int loginSize = encodedLogin.remaining();
@@ -127,7 +126,7 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
-        byte opCode = (byte) ClientMessageOpCode.GLOBAL_MESSAGE.value();
+        byte opCode = OpCode.GLOBAL_MESSAGE.value();
         String message = Arrays.stream(tokens, 1, tokens.length)
                 .collect(Collectors.joining(" "));
         logger.info("Created global : " + message);
@@ -161,7 +160,7 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
-        byte opCode = (byte) ClientMessageOpCode.PERSONAL_MESSAGE.value();
+        byte opCode = OpCode.PERSONAL_MESSAGE.value();
         String adresseLogin = tokens[1];
         ByteBuffer encodedLogin = charset.encode(adresseLogin);
         int loginSize = encodedLogin.remaining();
@@ -199,7 +198,7 @@ public class CommandTransformer {
             return Optional.empty();
         }
 
-        byte opCode = (byte) ClientMessageOpCode.PRIVATE_CONNECTION_REQUEST.value();
+        byte opCode = OpCode.PRIVATE_CONNECTION_REQUEST.value();
         String adresseeLogin = tokens[1];
         ByteBuffer encodedLogin = charset.encode(adresseeLogin);
         int loginSize = encodedLogin.remaining();

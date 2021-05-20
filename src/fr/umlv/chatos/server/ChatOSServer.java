@@ -9,6 +9,13 @@ import fr.umlv.chatos.readers.initialization.InitializationMessage;
 import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
+import fr.umlv.chatos.readers.privateconnection.clientestablishment.PrivateConnectionClientEstablishment;
+import fr.umlv.chatos.readers.privateconnection.clientestablishment.PrivateConnectionClientEstablishmentReader;
+import fr.umlv.chatos.readers.privateconnection.request.PrivateConnectionRequest;
+import fr.umlv.chatos.readers.privateconnection.request.PrivateConnectionRequestReader;
+import fr.umlv.chatos.readers.privateconnection.response.PrivateConnectionResponse;
+import fr.umlv.chatos.readers.privateconnection.response.PrivateConnectionResponseReader;
+import fr.umlv.chatos.readers.servererrorcode.ServerErrorCode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -21,15 +28,13 @@ import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static fr.umlv.chatos.readers.initialization.InitializationMessage.*;
-import static fr.umlv.chatos.readers.initialization.InitializationMessage.acceptByteBuffer;
+import static fr.umlv.chatos.readers.opcode.OpCode.FAIL;
+import static fr.umlv.chatos.readers.opcode.OpCode.SUCCESS;
 import static fr.umlv.chatos.readers.servererrorcode.ServerErrorCode.ALREADY_USED;
 
 public class ChatOSServer {
 
     static private class Context {
-
-        private static final Charset UTF8 = StandardCharsets.UTF_8;
 
         final private SelectionKey key;
         final private SocketChannel sc;
@@ -41,9 +46,12 @@ public class ChatOSServer {
         private boolean closed = false;
 
         private final Reader<OpCode> opReader = new OpCodeReader();
+        private final Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
         private final Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
         private final Reader<GlobalMessage> globalMessageReader = new GlobalMessageReader();
-        private final Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
+        private final Reader<PrivateConnectionRequest> privateConnectionRequestReader = new PrivateConnectionRequestReader();
+        private final Reader<PrivateConnectionResponse> privateConnectionResponseReader = new PrivateConnectionResponseReader();
+        private final Reader<PrivateConnectionClientEstablishment> privateConnectionClientEstablishmentReader = new PrivateConnectionClientEstablishmentReader();
         private OpCode opCode = null;
         private String login = null;
 
@@ -54,6 +62,19 @@ public class ChatOSServer {
             this.server = server;
         }
 
+
+        public static ByteBuffer acceptByteBuffer() {
+            return ByteBuffer.allocate(Byte.BYTES)
+                    .put(SUCCESS.value())
+                    .flip();
+        }
+
+        public static ByteBuffer failureByteBuffer(ServerErrorCode errorCode){
+            return ByteBuffer.allocate(Byte.BYTES * 2)
+                    .put(FAIL.value())
+                    .put(errorCode.value())
+                    .flip();
+        }
 
         private void processIn() {
             switch (opCode) {
@@ -73,7 +94,7 @@ public class ChatOSServer {
                                 } else {
                                     serverResponse = failureByteBuffer(ALREADY_USED);
                                 }
-                                server.sendPersonalMessage(login, serverResponse);
+                                queueMessage(serverResponse);
                                 initializationMessageReader.reset();
                             }
                             case REFILL -> {
@@ -95,12 +116,14 @@ public class ChatOSServer {
                             case DONE -> {
                                 System.out.println("DONE global");
                                 opCode = null;
-                                var value = globalMessageReader.get().toByteBuffer(BUFFER_SIZE);
-                                if (value.isEmpty()) {
+                                var globalMessage = globalMessageReader.get();
+                                var globalMessageToSend = new GlobalMessage(globalMessage.getValue(), login);
+                                var globalMessageToSendByteBuffer = globalMessageToSend.toByteBuffer(BUFFER_SIZE);
+                                if (globalMessageToSendByteBuffer.isEmpty()) {
                                     globalMessageReader.reset();
                                     break;
                                 }
-                                server.broadcast(value.orElseThrow());
+                                server.broadcast(globalMessageToSendByteBuffer.orElseThrow());
                                 globalMessageReader.reset();
                             }
                             case REFILL -> {
@@ -121,13 +144,14 @@ public class ChatOSServer {
                         switch (status) {
                             case DONE -> {
                                 opCode = null;
-                                var value = personalMessageReader.get();
-                                var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
-                                if (valueByteBuffer.isEmpty()) {
+                                var personalMessage = personalMessageReader.get();
+                                var personalMessageToSend = new PersonalMessage(login, personalMessage.getValue());
+                                var personalMessageToSendByteBuffer = personalMessageToSend.toByteBuffer(BUFFER_SIZE);
+                                if (personalMessageToSendByteBuffer.isEmpty()) {
                                     personalMessageReader.reset();
                                     break;
                                 }
-                                server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow());
+                                server.sendPersonalMessage(personalMessage.getLogin(), personalMessageToSendByteBuffer.orElseThrow());
                                 personalMessageReader.reset();
                             }
                             case REFILL -> {
@@ -142,7 +166,39 @@ public class ChatOSServer {
                         }
                     }
                 }
+                case PRIVATE_CONNECTION_REQUEST -> {
+                    for(;;){
+                        Reader.ProcessStatus status = privateConnectionRequestReader.process(bbin);
+                        switch (status) {
+                            case DONE -> {
+                                opCode = null;
+                                var value = privateConnectionRequestReader.get();
+                                var valueByteBuffer = value.toByteBuffer(BUFFER_SIZE);
+                                if (valueByteBuffer.isEmpty()) {
+                                    privateConnectionRequestReader.reset();
+                                    break;
+                                }
+                                server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow());
+                                privateConnectionRequestReader.reset();
+                            }
+                            case REFILL -> {
+                                System.out.println("REFILL perso");
+                                return;
+                            }
+                            case ERROR -> {
+                                System.out.println("CLOSE");
+                                silentlyClose();
+                                return;
+                            }
+                        }
+                    }
+                }
+                case PRIVATE_CONNECTION_RESPONSE -> {
 
+                }
+                case PRIVATE_CONNECTION_CLIENT_ESTABLISHMENT -> {
+
+                }
 
             }
         }

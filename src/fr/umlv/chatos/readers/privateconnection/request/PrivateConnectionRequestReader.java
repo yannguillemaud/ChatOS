@@ -1,22 +1,24 @@
-package fr.umlv.chatos.readers.initialization;
+package fr.umlv.chatos.readers.privateconnection.request;
 
 import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.StringReader;
 
 import java.nio.ByteBuffer;
 
-public class InitializationMessageReader implements Reader<InitializationMessage> {
+public class PrivateConnectionRequestReader  implements Reader<PrivateConnectionRequest> {
 
-    private enum State {DONE,WAITING,ERROR}
+    private enum State {DONE, WAITING, ERROR}
 
     private final StringReader stringReader = new StringReader();
 
     private State state = State.WAITING;
-    private InitializationMessage initializationMessage;
+    private PrivateConnectionRequest privateConnectionRequest;
 
     @Override
     public ProcessStatus process(ByteBuffer bb) {
-        if(state == State.DONE || state == State.ERROR) throw new IllegalStateException();
+        if(state == State.DONE || state == State.ERROR) {
+            throw new IllegalStateException();
+        }
 
         var messageReaderStatus = stringReader.process(bb);
         if(messageReaderStatus != ProcessStatus.DONE) {
@@ -26,22 +28,22 @@ public class InitializationMessageReader implements Reader<InitializationMessage
         String login = stringReader.get();
         stringReader.reset();
 
-        initializationMessage = new InitializationMessage(login);
+        privateConnectionRequest = new PrivateConnectionRequest(login);
         state = State.DONE;
         return ProcessStatus.DONE;
     }
 
     @Override
-    public InitializationMessage get() {
+    public PrivateConnectionRequest get() {
         if(state != State.DONE) {
             throw new IllegalStateException();
         }
-        return initializationMessage;
+        return privateConnectionRequest;
     }
 
     @Override
     public void reset() {
-        initializationMessage = null;
+        privateConnectionRequest = null;
         stringReader.reset();
         state = State.WAITING;
     }

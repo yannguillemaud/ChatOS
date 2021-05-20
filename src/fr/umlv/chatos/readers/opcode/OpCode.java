@@ -8,8 +8,8 @@ public enum OpCode {
     FAIL((byte) 3),
     GLOBAL_MESSAGE((byte) 4),
     PERSONAL_MESSAGE((byte) 5),
-    PRIVATE_CONNECTION_CLIENT_REQUEST((byte) 6),
-    PRIVATE_CONNECTION_SERVER_REQUEST((byte) 7),
+    PRIVATE_CONNECTION_REQUEST((byte) 6),
+    PRIVATE_CONNECTION_ACCEPTATION_REQUEST((byte) 7),
     PRIVATE_CONNECTION_RESPONSE((byte) 8),
     PRIVATE_CONNECTION_SERVER_ESTABLISHMENT((byte) 9),
     PRIVATE_CONNECTION_CLIENT_ESTABLISHMENT((byte) 10);
@@ -18,7 +18,7 @@ public enum OpCode {
     OpCode(final byte value) {
         this.value = value;
     }
-    public int value() {
+    public byte value() {
         return this.value;
     }
 

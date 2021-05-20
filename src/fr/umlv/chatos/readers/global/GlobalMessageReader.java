@@ -2,15 +2,12 @@ package fr.umlv.chatos.readers.global;
 
 import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.StringReader;
-import fr.umlv.chatos.readers.global.GlobalMessage;
 
 import java.nio.ByteBuffer;
 
 public class GlobalMessageReader implements Reader<GlobalMessage> {
 
     private enum State {DONE,WAITING,ERROR}
-
-    private static final int BUFFER_SIZE = 1024;
 
     private final StringReader stringReader = new StringReader();
 

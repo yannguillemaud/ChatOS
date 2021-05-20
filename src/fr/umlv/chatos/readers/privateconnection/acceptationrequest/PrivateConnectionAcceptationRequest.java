@@ -1,49 +1,43 @@
-package fr.umlv.chatos.readers.personal;
+package fr.umlv.chatos.readers.privateconnection.acceptationrequest;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import static fr.umlv.chatos.readers.opcode.OpCode.PERSONAL_MESSAGE;
+import static fr.umlv.chatos.readers.opcode.OpCode.PRIVATE_CONNECTION_ACCEPTATION_REQUEST;
 
-public class PersonalMessage {
+public class PrivateConnectionAcceptationRequest {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
     private final String login;
-    private final String value;
 
-    public PersonalMessage(String login, String value){
+    public PrivateConnectionAcceptationRequest(String login){
         this.login = login;
-        this.value = value;
     }
 
     /**
-     * Transforms a PersonalMessage instance into an Optional ByteBuffer if the given size is enough to store it
+     * Transforms a PrivateConnectionAcceptationRequest instance into an Optional ByteBuffer if the given size is enough to store it
      * Otherwise returns an empty optional
      * @param maxBufferSize the maximum size of the message
      * @return An optional containing the message if it has enough space, otherwise an empty one
      */
     public Optional<ByteBuffer> toByteBuffer(int maxBufferSize) {
         ByteBuffer encodedLogin = UTF8.encode(login);
-        ByteBuffer encodedValue = UTF8.encode(value);
         int loginSize = encodedLogin.remaining();
-        int valueSize = encodedValue.remaining();
-        int totalSize = Byte.BYTES + Integer.BYTES * 2 + loginSize + valueSize;
+        int totalSize = Byte.BYTES + Integer.BYTES + loginSize;
         if(totalSize <= maxBufferSize){
             return Optional.of(ByteBuffer.allocate(maxBufferSize)
-                    .put(PERSONAL_MESSAGE.value())
+                    .put(PRIVATE_CONNECTION_ACCEPTATION_REQUEST.value())
                     .putInt(loginSize).put(encodedLogin)
-                    .putInt(valueSize).put(encodedValue)
                     .flip()
             );
         } else return Optional.empty();
-    };
+    }
 
     @Override
     public String toString() {
-        return "Personal Message from " + login + ": " + value;
+        return "Private connection acceptation request to : " + login;
     }
 
     public String getLogin(){ return login; }
-    public String getValue(){ return value; }
 }
