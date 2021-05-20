@@ -47,7 +47,4 @@ public class GlobalMessage implements Sendable {
     public String toString() {
         return "Global from " + from + ": " + value;
     }
-
-    public String getFrom(){ return from; }
-    public String getValue(){ return value; }
 }

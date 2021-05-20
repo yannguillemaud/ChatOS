@@ -67,14 +67,14 @@ public class ChatOSServer {
                                 InitializationMessage message = initializationMessageReader.get();
                                 String login = message.getLogin();
                                 ByteBuffer serverResponse;
-                                //problème ici, je corrige ca
                                 if (server.isLoginAvailable(login)) {
                                     serverResponse = acceptByteBuffer();
+                                    logger.info("Set " + login + " to " + sc);
                                     this.login = login;
                                 } else {
                                     serverResponse = failureByteBuffer(ALREADY_USED);
                                 }
-                                server.sendPersonalMessage(login, serverResponse);
+                                queueMessage(serverResponse);
                                 initializationMessageReader.reset();
                             }
                             case REFILL -> {
@@ -97,11 +97,11 @@ public class ChatOSServer {
                                 System.out.println("DONE global");
                                 opCode = null;
                                 var value = globalMessageReader.get().toByteBuffer(BUFFER_SIZE);
+                                System.out.println("Global: " + value);
                                 if (value.isEmpty()) {
                                     globalMessageReader.reset();
                                     break;
                                 }
-                                System.out.println("Global: " + value.get());
                                 server.broadcast(value.orElseThrow());
                                 globalMessageReader.reset();
                             }
@@ -367,7 +367,7 @@ public class ChatOSServer {
         for (SelectionKey selectionKey : selector.keys()) {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
-                System.out.println("Login: " + context.login);
+                if(context.isInitialized()) System.out.println("Found: " + context.login);
                 if (context.isInitialized() && context.login.equals(login)) {
                     return false;
                 }
@@ -400,6 +400,7 @@ public class ChatOSServer {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
                 if(context.isInitialized()) {
+                    System.out.println("Sending: " + buffMsg + " to " + context.login);
                     context.queueMessage(buffMsg);
                 }
             }
