@@ -1,6 +1,6 @@
 package fr.umlv.chatos.readers.privateconnection.serverestablishment;
 
-import fr.umlv.chatos.readers.Sendable;
+import fr.umlv.chatos.readers.trame.Trame;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -9,7 +9,7 @@ import java.util.Optional;
 
 import static fr.umlv.chatos.readers.opcode.OpCode.PRIVATE_CONNECTION_SERVER_ESTABLISHMENT;
 
-public class PrivateConnectionServerEstablishment implements Sendable {
+public class PrivateConnectionServerEstablishment implements Trame {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
     private final String login;
     private final String token;

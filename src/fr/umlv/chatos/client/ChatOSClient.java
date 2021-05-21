@@ -9,8 +9,8 @@ import fr.umlv.chatos.readers.opcode.OpCode;
 import fr.umlv.chatos.readers.opcode.OpCodeReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
-import fr.umlv.chatos.readers.servererrorcode.ServerErrorCode;
-import fr.umlv.chatos.readers.servererrorcode.ServerErrorReader;
+import fr.umlv.chatos.readers.errorcode.ErrorCode;
+import fr.umlv.chatos.readers.errorcode.ErrorCodeReader;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -37,7 +37,7 @@ public class ChatOSClient {
         final private Queue<ByteBuffer> queue = new LinkedList<>(); // buffers read-mode
 
         final private Reader<OpCode> serverOpReader = new OpCodeReader();
-        final private Reader<ServerErrorCode> serverErrorReader = new ServerErrorReader();
+        final private Reader<ErrorCode> serverErrorReader = new ErrorCodeReader();
         final private Reader<ServerGlobalMessage> globalMessageReader = new ServerGlobalMessageReader();
         final private Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
 
@@ -59,7 +59,7 @@ public class ChatOSClient {
             switch(status){
                 case DONE -> {
                     OpCode opCode = serverOpReader.get();
-                    logger.info("Received opcode: " + opCode);
+//                    logger.info("Received opcode: " + opCode);
                     processOpCode(opCode);
                     serverOpReader.reset();
 
@@ -73,7 +73,7 @@ public class ChatOSClient {
         }
 
         private void processOpCode(OpCode opCode){
-            System.out.println("Received: " + opCode);
+//            System.out.println("Received: " + opCode);
             switch (opCode) {
                 case SUCCESS -> System.out.println("Success");
                 case FAIL -> processFail();
@@ -88,7 +88,7 @@ public class ChatOSClient {
                 ProcessStatus status = serverErrorReader.process(bbin);
                 switch (status){
                     case DONE:
-                        ServerErrorCode errorCode = serverErrorReader.get();
+                        ErrorCode errorCode = serverErrorReader.get();
                         System.out.println("Done. ErrorCode: " + errorCode);
                         serverErrorReader.reset();
                         return;

@@ -1,14 +1,14 @@
-package fr.umlv.chatos.readers.servererrorcode;
+package fr.umlv.chatos.readers.errorcode;
 
 import fr.umlv.chatos.readers.ByteReader;
 import fr.umlv.chatos.readers.Reader;
 
 import java.nio.ByteBuffer;
 
-public class ServerErrorReader implements Reader<ServerErrorCode> {
+public class ErrorCodeReader implements Reader<ErrorCode> {
     private final ByteReader intReader = new ByteReader();
     private ProcessStatus state = ProcessStatus.REFILL;
-    private ServerErrorCode opCode = null;
+    private ErrorCode opCode = null;
 
 
     @Override
@@ -19,7 +19,7 @@ public class ServerErrorReader implements Reader<ServerErrorCode> {
 
         state = intReader.process(bb);
         if (state == ProcessStatus.DONE) {
-            var optional = ServerErrorCode.serverErrorCode(intReader.get());
+            var optional = ErrorCode.serverErrorCode(intReader.get());
             if (optional.isEmpty()) { state = ProcessStatus.ERROR; }
             else opCode = optional.get();
         }
@@ -28,7 +28,7 @@ public class ServerErrorReader implements Reader<ServerErrorCode> {
     }
 
     @Override
-    public ServerErrorCode get() {
+    public ErrorCode get() {
         if (state!= ProcessStatus.DONE) {
             throw new IllegalStateException();
         }

@@ -61,7 +61,8 @@ A client can send a message to all of connected clients on the server with the f
 - Encoded message
 
 #### Server Response
-No server response for this request
+The server will respond to tell to the client if the pseudonym is valid and if it is not already used.
+See server response explanations in section **# 6. Server Response** below.
 
 #### Server Message
 The message of the client will be sent from the server to every connected client in a packet containing the sender pseudonym and his message.
@@ -109,7 +110,7 @@ It will have the following format :
 - Addressee's pseudonyme encoded
 
 #### Server Response
-The server will respond to tell to the seeker if the addressee's pseudonym is linked to an existing connected client and if he has accepted the private connection request.
+The server will respond to tell to the seeker if the addressee's pseudonym is linked to an existing connected client.
 See server response explanation in section **# 6. Server Response** below.
 
 #### Server Acceptation Request

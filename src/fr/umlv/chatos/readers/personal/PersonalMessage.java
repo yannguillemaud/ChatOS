@@ -1,23 +1,24 @@
 package fr.umlv.chatos.readers.personal;
 
-import fr.umlv.chatos.readers.Sendable;
+import fr.umlv.chatos.readers.trame.Trame;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.Optional;
 
 import static fr.umlv.chatos.readers.opcode.OpCode.PERSONAL_MESSAGE;
 import static java.util.Objects.requireNonNull;
 
-public class PersonalMessage implements Sendable {
+public class PersonalMessage implements Trame {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
     private final String login;
     private final String value;
 
     public PersonalMessage(String login, String value){
-        this.login = login;
-        this.value = value;
+        this.login = Objects.requireNonNull(login);
+        this.value = Objects.requireNonNull(value);
     }
 
     /**

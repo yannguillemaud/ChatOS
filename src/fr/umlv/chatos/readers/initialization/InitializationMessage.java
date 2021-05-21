@@ -1,6 +1,6 @@
 package fr.umlv.chatos.readers.initialization;
 
-import fr.umlv.chatos.readers.Sendable;
+import fr.umlv.chatos.readers.trame.Trame;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -8,7 +8,7 @@ import java.util.Optional;
 
 import static fr.umlv.chatos.readers.opcode.OpCode.INITIALIZATION;
 
-public class InitializationMessage implements Sendable {
+public class InitializationMessage implements Trame {
     private static final Charset UTF8 = StandardCharsets.UTF_8;
     private final String login;
 

@@ -3,7 +3,7 @@ package fr.umlv.chatos.server.token;
 import java.util.UUID;
 
 public class TokenGenerator {
-    static String token() {
+    public static String token() {
         StringBuilder token = new StringBuilder();
         long currentTimeMillis = System.currentTimeMillis();
         return token

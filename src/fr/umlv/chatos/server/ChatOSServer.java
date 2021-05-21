@@ -1,23 +1,19 @@
 package fr.umlv.chatos.server;
 
 import fr.umlv.chatos.readers.Reader;
-import fr.umlv.chatos.readers.Sendable;
 import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessage;
-import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessageReader;
-import fr.umlv.chatos.readers.opcode.OpCode;
-import fr.umlv.chatos.readers.opcode.OpCodeReader;
+import fr.umlv.chatos.readers.errorcode.ErrorCode;
+import fr.umlv.chatos.readers.privateconnection.acceptationrequest.PrivateConnectionAcceptationRequest;
+import fr.umlv.chatos.readers.privateconnection.request.PrivateConnectionRequest;
+import fr.umlv.chatos.readers.privateconnection.response.PrivateConnectionResponse;
+import fr.umlv.chatos.readers.privateconnection.serverestablishment.PrivateConnectionServerEstablishment;
+import fr.umlv.chatos.readers.success.SuccessMessage;
+import fr.umlv.chatos.readers.trame.Trame;
 import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessage;
 import fr.umlv.chatos.readers.initialization.InitializationMessage;
-import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
-import fr.umlv.chatos.readers.personal.PersonalMessageReader;
-import fr.umlv.chatos.readers.privateconnection.clientestablishment.PrivateConnectionClientEstablishment;
-import fr.umlv.chatos.readers.privateconnection.clientestablishment.PrivateConnectionClientEstablishmentReader;
-import fr.umlv.chatos.readers.privateconnection.request.PrivateConnectionRequest;
-import fr.umlv.chatos.readers.privateconnection.request.PrivateConnectionRequestReader;
-import fr.umlv.chatos.readers.privateconnection.response.PrivateConnectionResponse;
-import fr.umlv.chatos.readers.privateconnection.response.PrivateConnectionResponseReader;
-import fr.umlv.chatos.readers.servererrorcode.ServerErrorCode;
+import fr.umlv.chatos.readers.trame.TrameReader;
+import fr.umlv.chatos.server.token.TokenGenerator;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -28,9 +24,7 @@ import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static fr.umlv.chatos.readers.opcode.OpCode.FAIL;
-import static fr.umlv.chatos.readers.opcode.OpCode.SUCCESS;
-import static fr.umlv.chatos.readers.servererrorcode.ServerErrorCode.ALREADY_USED;
+import static fr.umlv.chatos.readers.errorcode.ErrorCode.*;
 
 public class ChatOSServer {
 
@@ -38,23 +32,17 @@ public class ChatOSServer {
 
         final private SelectionKey key;
         final private SocketChannel sc;
-        private final int BUFFER_SIZE = 1024;
+        private static final int BUFFER_SIZE = 1024;
         final private ByteBuffer bbin = ByteBuffer.allocate(BUFFER_SIZE);
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
-        final private Queue<Sendable> queue = new LinkedList<>();
+        final private Queue<Trame> queue = new LinkedList<>();
         final private ChatOSServer server;
         private boolean closed = false;
 
-        private final Reader<OpCode> opReader = new OpCodeReader();
-        private final Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
-        private final Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
-        private final Reader<ClientGlobalMessage> clientGlobalMessageReader = new ClientGlobalMessageReader();
-        private final Reader<PrivateConnectionRequest> privateConnectionRequestReader = new PrivateConnectionRequestReader();
-        private final Reader<PrivateConnectionResponse> privateConnectionResponseReader = new PrivateConnectionResponseReader();
-        private final Reader<PrivateConnectionClientEstablishment> privateConnectionClientEstablishmentReader = new PrivateConnectionClientEstablishmentReader();
-        private OpCode opCode = null;
+        private final TrameReader trameReader = new TrameReader();
         private String login = null;
 
+        private boolean isInitialized = false;
 
         private Context(ChatOSServer server, SelectionKey key){
             this.key = key;
@@ -62,184 +50,152 @@ public class ChatOSServer {
             this.server = server;
         }
 
-
-        public static Sendable acceptByteBuffer() {
-            return maxBufferSize -> Optional.of(
-                    ByteBuffer.allocate(Byte.BYTES)
-                    .put(SUCCESS.value())
-                    .flip()
-            );
-        }
-
-        public static Sendable failureByteBuffer(ServerErrorCode errorCode){
-            return maxBufferSize -> Optional.of(ByteBuffer.allocate(Byte.BYTES * 2)
-                    .put(FAIL.value())
-                    .put(errorCode.value())
-                    .flip()
-            );
-        }
-
         private void processIn() {
-            switch (opCode) {
-                case INITIALIZATION -> {
-                    for(;;){
-                        Reader.ProcessStatus status = initializationMessageReader.process(bbin);
-                        switch (status) {
-                            case DONE -> {
-                                System.out.println("DONE");
-                                opCode = null;
-                                InitializationMessage message = initializationMessageReader.get();
-                                String login = message.getLogin();
-                                Sendable serverResponse;
-                                if (server.isLoginAvailable(login)) {
-                                    serverResponse = acceptByteBuffer();
-                                    logger.info("Set " + login + " to " + sc);
-                                    this.login = login;
-                                } else {
-                                    serverResponse = failureByteBuffer(ALREADY_USED);
-                                }
-                                queueMessage(serverResponse);
-                                initializationMessageReader.reset();
+            for(;;){
+                Reader.ProcessStatus status = trameReader.process(bbin);
+                switch (status) {
+                    case DONE -> {
+                        System.out.println("DONE");
+                        Trame trame = trameReader.get();
+                        trameReader.reset();
+
+                        if (trame instanceof InitializationMessage initializationMessage) {
+                            if (isInitialized) {
+                                queueMessage(CONNECTION_ALREADY_INITIALIZED);
+                                break;
                             }
-                            case REFILL -> {
-                                System.out.println("REFILL");
-                                return;
+
+                            String login = initializationMessage.getLogin();
+
+                            if (server.tryRegister(login, this)) {
+                                this.login = login;
+                                logger.info("Set " + login + " to " + sc);
+                                queueMessage(new SuccessMessage());
+                                isInitialized = true;
+                            } else {
+                                queueMessage(ALREADY_USED);
                             }
-                            case ERROR -> {
-                                System.out.println("CLOSE");
-                                silentlyClose();
-                                return;
+
+                        } else if (trame instanceof PersonalMessage personalMessage) {
+                            if (!isInitialized) {
+                                queueMessage(CONNECTION_NOT_INITIALIZED);
+                                break;
+                            } else if (personalMessage.getLogin().length() == 0) {
+                                queueMessage(EMPTY_PSEUDO);
+                                break;
                             }
-                        }
-                    }
-                }
-                case CLIENT_GLOBAL_MESSAGE -> {
-                    for(;;){
-                        Reader.ProcessStatus status = clientGlobalMessageReader.process(bbin);
-                        switch (status) {
-                            case DONE -> {
-                                System.out.println("DONE global");
-                                opCode = null;
-                                var globalMessage = clientGlobalMessageReader.get();
-                                var globalMessageToSend = new ServerGlobalMessage(globalMessage.getValue(), login);
-                                var globalMessageToSendByteBuffer = globalMessageToSend.toByteBuffer(BUFFER_SIZE);
-                                if (globalMessageToSendByteBuffer.isEmpty()) {
-                                    clientGlobalMessageReader.reset();
-                                    break;
-                                }
+
+                            var personalMessageToSend = new PersonalMessage(login, personalMessage.getValue());
+                            var personalMessageToSendByteBuffer = personalMessageToSend.toByteBuffer(BUFFER_SIZE);
+
+                            if (personalMessageToSendByteBuffer.isEmpty()) {
+                                queueMessage(TOO_LONG_MESSAGE);
+                            } else if (server.trySendTrameTo(personalMessage.getLogin(), personalMessageToSend)) {
+                                queueMessage(new SuccessMessage());
+                            } else {
+                                queueMessage(NOT_LINKED);
+                            }
+
+                        } else if (trame instanceof ClientGlobalMessage clientGlobalMessage) {
+                            if (!isInitialized) {
+                                queueMessage(CONNECTION_NOT_INITIALIZED);
+                                break;
+                            }
+
+                            var globalMessageToSend = new ServerGlobalMessage(login, clientGlobalMessage.getValue());
+                            var globalMessageToSendByteBuffer = globalMessageToSend.toByteBuffer(BUFFER_SIZE);
+
+                            Trame serverResponse;
+                            if (globalMessageToSendByteBuffer.isEmpty()) {
+                                serverResponse = TOO_LONG_MESSAGE;
+                            } else {
                                 server.broadcast(globalMessageToSend);
-                                clientGlobalMessageReader.reset();
+                                serverResponse = new SuccessMessage();
                             }
-                            case REFILL -> {
-                                System.out.println("REFILL global");
-                                return;
+
+                            queueMessage(serverResponse);
+
+                        } else if (trame instanceof PrivateConnectionRequest privateConnectionRequest) {
+                            if (!isInitialized) {
+                                queueMessage(CONNECTION_NOT_INITIALIZED);
+                                break;
+                            } else if (privateConnectionRequest.getLogin().length() == 0) {
+                                queueMessage(EMPTY_PSEUDO);
+                                break;
+                            } else if (server.isPrivateConnectionDemandInitiated(login, privateConnectionRequest.getLogin())) {
+                                queueMessage(PRIVATE_CONNECTION_ALREADY_INITIATED);
+                                break;
+                            } else if (server.isPrivateConnectionEstablished(login, privateConnectionRequest.getLogin())) {
+                                queueMessage(PRIVATE_CONNECTION_ALREADY_ESTABLISHED);
+                                break;
                             }
-                            case ERROR -> {
-                                System.out.println("CLOSE global");
-                                silentlyClose();
-                                return;
+
+
+                            var privateConnectionAcceptationRequest = new PrivateConnectionAcceptationRequest(privateConnectionRequest.getLogin());
+                            var privateConnectionAcceptationRequestByteBuffer = privateConnectionAcceptationRequest.toByteBuffer(BUFFER_SIZE);
+
+                            if (privateConnectionAcceptationRequestByteBuffer.isEmpty()) {
+                                queueMessage(TOO_LONG_MESSAGE); // Pas sur de ce code d'erreur
+                            } else if (server.trySendTrameTo(privateConnectionRequest.getLogin(), privateConnectionAcceptationRequest)) {
+                                server.privateConnectionDemandInit(login, privateConnectionRequest.getLogin());
+                                queueMessage(new SuccessMessage());
+                            } else {
+                                queueMessage(NOT_LINKED);
                             }
-                        }
-                    }
-                }
-                case PERSONAL_MESSAGE -> {
-                    for(;;){
-                        Reader.ProcessStatus status = personalMessageReader.process(bbin);
-                        switch (status) {
-                            case DONE -> {
-                                opCode = null;
-                                var personalMessage = personalMessageReader.get();
-                                var personalMessageToSend = new PersonalMessage(login, personalMessage.getValue());
-                                var personalMessageToSendByteBuffer = personalMessageToSend.toByteBuffer(BUFFER_SIZE);
-                                if (personalMessageToSendByteBuffer.isEmpty()) {
-                                    personalMessageReader.reset();
-                                    break;
+
+                        } else if (trame instanceof PrivateConnectionResponse privateConnectionResponse) {
+                            if (!isInitialized) {
+                                queueMessage(CONNECTION_NOT_INITIALIZED);
+                                break;
+                            } else if (privateConnectionResponse.getLogin().length() == 0) {
+                                queueMessage(EMPTY_PSEUDO);
+                                break;
+                            } else if (!server.isPrivateConnectionDemandInitiated(privateConnectionResponse.getLogin(), login)) {
+                                queueMessage(PRIVATE_CONNECTION_DEMAND_NOT_INITIATED);
+                                break;
+                            } else if (server.isPrivateConnectionEstablished(privateConnectionResponse.getLogin(), login)) {
+                                queueMessage(PRIVATE_CONNECTION_ALREADY_ESTABLISHED);
+                                break;
+                            } else if (!privateConnectionResponse.getAcceptPrivateConnection()) {
+                                if (!server.trySendTrameTo(privateConnectionResponse.getLogin(), CONNEXION_DECLINED)) {
+                                    queueMessage(NOT_LINKED);
                                 }
-                                server.sendPersonalMessage(personalMessage.getLogin(), personalMessageToSend);
-                                personalMessageReader.reset();
+                                server.avortPrivateConnectionDemand(privateConnectionResponse.getLogin(), login);
+                                break;
                             }
-                            case REFILL -> {
-                                System.out.println("REFILL perso");
-                                return;
+
+                            var token = server.generateNewToken();
+                            var privateConnectionEstablishmentA = new PrivateConnectionServerEstablishment(login, token);
+                            var privateConnectionEstablishmentB = new PrivateConnectionServerEstablishment(privateConnectionResponse.getLogin(), token);
+                            var privateConnectionEstablishmentAByteBuffer = privateConnectionEstablishmentA.toByteBuffer(BUFFER_SIZE);
+                            var privateConnectionEstablishmentBByteBuffer = privateConnectionEstablishmentB.toByteBuffer(BUFFER_SIZE);
+
+                            if (
+                                    privateConnectionEstablishmentAByteBuffer.isEmpty() ||
+                                    privateConnectionEstablishmentBByteBuffer.isEmpty()
+                            ) {
+                                queueMessage(UNDEFINED); // Je sais pas trop quoi mettre là
+                            } else if (
+                                    server.trySendTrameTo(login, privateConnectionEstablishmentB) &&
+                                    server.trySendTrameTo(privateConnectionResponse.getLogin(), privateConnectionEstablishmentA)
+                            ) {
+                                server.initPrivateConnection(privateConnectionResponse.getLogin(), login, token);
+                            } else {
+                                // Ca veut qu'un des deux gars existe pas ca n'as aucun sens
                             }
-                            case ERROR -> {
-                                System.out.println("CLOSE");
-                                silentlyClose();
-                                return;
-                            }
+
                         }
                     }
-                }
-                case PRIVATE_CONNECTION_REQUEST -> {
-//                    for(;;){
-//                        Reader.ProcessStatus status = privateConnectionRequestReader.process(bbin);
-//                        switch (status) {
-//                            case DONE -> {
-//                                opCode = null;
-//                                var privateConnectionRequest = privateConnectionRequestReader.get();
-//
-//                                var privateConnectionRequestByteBuffer = privateConnectionRequest.toByteBuffer(BUFFER_SIZE);
-//                                if (privateConnectionRequestByteBuffer.isEmpty()) {
-//                                    privateConnectionRequestReader.reset();
-//                                    break;
-//                                }
-//                                server.sendPersonalMessage(value.getLogin(), valueByteBuffer.orElseThrow());
-//                                privateConnectionRequestReader.reset();
-//                            }
-//                            case REFILL -> {
-//                                System.out.println("REFILL perso");
-//                                return;
-//                            }
-//                            case ERROR -> {
-//                                System.out.println("CLOSE");
-//                                silentlyClose();
-//                                return;
-//                            }
-//                        }
-//                    }
-                }
-                case PRIVATE_CONNECTION_RESPONSE -> {
-
-                }
-                case PRIVATE_CONNECTION_CLIENT_ESTABLISHMENT -> {
-
-                }
-
-            }
-        }
-
-        /**
-         * Process the content of bbin
-         *
-         * The convention is that bbin is in write-mode before the call
-         * to process and after the call
-         *
-         */
-        private void processInOpCode() {
-            if (opCode != null) {
-                processIn();
-            } else {
-                for(;;){
-                    Reader.ProcessStatus status = opReader.process(bbin);
-                    switch (status) {
-                        case DONE -> {
-                            opCode = opReader.get();
-                            System.out.println("Received: " + opCode);
-                            opReader.reset();
-                            processIn();
-                            return;
-                        }
-                        case REFILL -> {
-                            return;
-                        }
-                        case ERROR -> {
-                            System.out.println("CLOSE opcode");
-                            silentlyClose();
-                            return;
-                        }
+                    case REFILL -> {
+                        System.out.println("REFILL");
+                        return;
+                    }
+                    case ERROR -> {
+                        System.out.println("CLOSE");
+                        silentlyClose();
+                        return;
                     }
                 }
-
             }
         }
 
@@ -254,10 +210,10 @@ public class ChatOSServer {
         /**
          * Add a message to the message queue, tries to fill bbOut and updateInterestOps
          *
-         * @param sendable
+         * @param trame
          */
-        private void queueMessage(Sendable sendable) {
-            queue.add(sendable);
+        private void queueMessage(Trame trame) {
+            queue.add(trame);
 
             processOut();
             updateInterestOps();
@@ -327,8 +283,11 @@ public class ChatOSServer {
         private void doRead() throws IOException {
             if (sc.read(bbin) == -1) {
                 closed = true;
+                if (isInitialized) {
+                    server.delete(login);
+                }
             }
-            processInOpCode();
+            processIn();
             updateInterestOps();
         }
 
@@ -350,13 +309,14 @@ public class ChatOSServer {
         }
 
         public boolean isInitialized() {
-            return login != null;
+            return isInitialized;
         }
     }
 
-    static private final int STRING_SIZE = 1_024;
     static private final Logger logger = Logger.getLogger(ChatOSServer.class.getName());
 
+    private final HashMap<String, Context> contextMap = new HashMap<>();
+    private final HashMap<Map.Entry<String, String>, Boolean> privateConnections = new HashMap<>();
     private final ServerSocketChannel serverSocketChannel;
     private final Selector selector;
 
@@ -424,31 +384,23 @@ public class ChatOSServer {
         }
     }
 
-    private boolean isLoginAvailable(String login){
+    private boolean tryRegister(String login, Context context) {
         logger.info("Checking availability for " + login);
-        for (SelectionKey selectionKey : selector.keys()) {
-            if (!selectionKey.channel().equals(serverSocketChannel)) {
-                var context = (Context)selectionKey.attachment();
-                if(context.isInitialized()) System.out.println("Found: " + context.login);
-                if (context.isInitialized() && context.login.equals(login)) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return contextMap.computeIfAbsent(login, key -> context).equals(context);
     }
 
+    private void delete(String login) {
+        logger.info("Delete user " + login);
+        contextMap.remove(login);
+    }
 
-    private void sendPersonalMessage(String login, PersonalMessage personalMessage) {
-        logger.info("Sending " + personalMessage.getValue() + " to " + login);
-        for (SelectionKey selectionKey : selector.keys()) {
-            if (!selectionKey.channel().equals(serverSocketChannel)) {
-                var context = (Context)selectionKey.attachment();
-                if (context.isInitialized() && context.login.equals(login)) {
-                    context.queueMessage(personalMessage);
-                    return;
-                }
-            }
+    private boolean trySendTrameTo(String login, Trame trame) {
+        var context = contextMap.get(login);
+        if (context == null) {
+            return false;
+        } else {
+            context.queueMessage(trame);
+            return true;
         }
     }
 
@@ -467,6 +419,31 @@ public class ChatOSServer {
                 }
             }
         });
+    }
+
+    private String generateNewToken() {
+        return TokenGenerator.token();
+    }
+
+
+    private boolean isPrivateConnectionDemandInitiated(String loginSender, String loginReceiver) {
+        return privateConnections.get(Map.entry(loginSender, loginReceiver)) == false;
+    }
+
+    private boolean isPrivateConnectionEstablished(String loginSender, String loginReceiver) {
+        return privateConnections.get(Map.entry(loginSender, loginReceiver)) == true;
+    }
+
+    private void privateConnectionDemandInit(String loginSender, String loginReceiver) {
+        privateConnections.put(Map.entry(loginSender, loginReceiver), false);
+    }
+
+    private void avortPrivateConnectionDemand(String loginSender, String loginReceiver) {
+        privateConnections.remove(Map.entry(loginSender, loginReceiver), false);
+    }
+
+    private void initPrivateConnection(String loginSender, String loginReceiver, String token) {
+        privateConnections.computeIfPresent(Map.entry(loginSender, loginReceiver), (k, v) -> true);
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
