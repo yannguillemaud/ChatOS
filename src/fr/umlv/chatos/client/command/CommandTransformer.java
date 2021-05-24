@@ -1,12 +1,14 @@
 package fr.umlv.chatos.client.command;
 
 import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessage;
-import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessage;
 import fr.umlv.chatos.readers.initialization.InitializationMessage;
-import fr.umlv.chatos.readers.opcode.OpCode;
 import fr.umlv.chatos.readers.personal.PersonalMessage;
+import fr.umlv.chatos.readers.privateconnection.acceptationrequest.PrivateConnectionAcceptationRequest;
+import fr.umlv.chatos.readers.privateconnection.response.PrivateConnectionResponse;
+import fr.umlv.chatos.readers.trame.Trame;
 
-import java.nio.ByteBuffer;
+import fr.umlv.chatos.readers.privateconnection.request.*;
+
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -30,20 +32,22 @@ public class CommandTransformer {
     private String linkedLogin;
 
     private static void initMessageUsage(){
-        System.out.println("Server connexion request: INIT login");
+        System.out.println("Server connexion request: login login");
     }
 
     private static void globalMessageUsage(){
-        System.out.println("Global message: GLOBAL message");
+        System.out.println("Global message: global message");
     }
 
     private static void privateMessageUsage(){
-        System.out.println("Private message: PRIVATEMSG to_pseudo message");
+        System.out.println("Private message: private to_pseudo message");
     }
 
-    private static void connexionRequestUsage(){
-        System.out.println("Private connexion request: PRIVATE to_pseudo");
-    }
+    private static void connexionRequestUsage(){ System.out.println("Private connexion request: PRIVATE to_pseudo"); }
+
+    private static void acceptUsage() { System.out.println("Accept private connexion: accept to_pseudo"); }
+
+    private static void declineUsage() { System.out.println("Decline private connexion: decline to_pseudo"); }
 
     private static void usages(){
         System.out.println("Commands list: ");
@@ -51,6 +55,8 @@ public class CommandTransformer {
         globalMessageUsage();
         privateMessageUsage();
         connexionRequestUsage();
+        acceptUsage();
+        declineUsage();
     }
 
     /**
@@ -60,7 +66,7 @@ public class CommandTransformer {
      * @return Optional of bytebuffer containing the message according to Chatos protocol's format,
      * empty if it's size > BUFFER_SIZE [ 1.0: 1024 ]
      */
-    public Optional<ByteBuffer> asByteBuffer(String commandString){
+    public Optional<Trame> asByteBuffer(String commandString){
         requireNonNull(commandString);
         String[] tokens = commandString.split(" ");
         if(tokens.length < 2) return Optional.empty();
@@ -72,20 +78,15 @@ public class CommandTransformer {
      * @param tokens
      * @return
      */
-    private Optional<ByteBuffer> transformCommand(String[] tokens){
+    private Optional<Trame> transformCommand(String[] tokens){
         String command = tokens[0];
-        if(command.equals("INIT")) return initToBB(tokens);
-
-        if(linkedLogin == null){
-            System.out.println("Not initialized yet");
-            initMessageUsage();
-            return Optional.empty();
-        }
-
         switch(command){
-            case "GLOBAL" : return globalToBB(tokens);
-            case "PRIVATEMSG" : return privateMsgToBB(tokens);
-            case "PRIVATE" : return connexionRqtToBB(tokens);
+            case "login" : return initTrame(tokens);
+            case "global" : return globalTrame(tokens);
+            case "private" : return privateMessageTrame(tokens);
+            case "connexion" : return connexionRqtTrame(tokens);
+            case "accept": return connexionAcceptTrame(tokens);
+            case "decline": return connexionDeclineTrame(tokens);
             default : {
                 System.out.println("Unknown command");
                 return Optional.empty();
@@ -99,20 +100,14 @@ public class CommandTransformer {
      * @return Optional of bytebuffer, containing ChatOs initialization bytebuffer
      * returns an Optional.empty if the buffer size is > 1024
      */
-    private Optional<ByteBuffer> initToBB(String[] tokens){
+    private Optional<Trame> initTrame(String[] tokens){
         if(tokens.length != 2) {
             initMessageUsage();
             return Optional.empty();
         }
 
-        byte opCode = OpCode.INITIALIZATION.value();
         String login = tokens[1];
-        Optional<ByteBuffer> initBuffer = new InitializationMessage(login).toByteBuffer(BUFFER_SIZE);
-        if(initBuffer.isPresent()){
-            logger.info("Correct init packet from " + login);
-            this.linkedLogin = login;
-        }
-        return initBuffer;
+        return Optional.of(new InitializationMessage(login));
     }
 
     /**
@@ -121,7 +116,7 @@ public class CommandTransformer {
      * @return Optional of bytebuffer, containing ChatOs global message bytebuffer
      * returns an Optional.empty if the buffer size is > 1024
      */
-    private Optional<ByteBuffer> globalToBB(String[] tokens){
+    private Optional<Trame> globalTrame(String[] tokens){
         if(tokens.length < 2) {
             globalMessageUsage();
             return Optional.empty();
@@ -130,12 +125,7 @@ public class CommandTransformer {
         String message = Arrays.stream(tokens, 1, tokens.length)
                 .collect(Collectors.joining(" "));
 
-        var clientGlobalMessage = new ClientGlobalMessage(message);
-        Optional<ByteBuffer> optional = clientGlobalMessage.toByteBuffer(BUFFER_SIZE);
-        if(optional.isEmpty()){
-            System.out.println("Message too long");
-        }
-        return optional;
+        return Optional.of(new ClientGlobalMessage(message));
     }
 
     /**
@@ -145,7 +135,7 @@ public class CommandTransformer {
      * @return Optional of bytebuffer, containing ChatOs private message bytebuffer
      * returns an Optional.empty if the buffer size is > 1024
      */
-    private Optional<ByteBuffer> privateMsgToBB(String[] tokens){
+    private Optional<Trame> privateMessageTrame(String[] tokens){
         if(tokens.length < 3) {
             privateMessageUsage();
             return Optional.empty();
@@ -154,11 +144,7 @@ public class CommandTransformer {
         String login = tokens[1];
         String message = Arrays.stream(tokens, 2, tokens.length)
                 .collect(Collectors.joining(" "));
-        Optional<ByteBuffer> optional = new PersonalMessage(login, message).toByteBuffer(BUFFER_SIZE);
-        if(optional.isEmpty()){
-            System.out.println("Message too long");
-        }
-        return optional;
+        return Optional.of(new PersonalMessage(login, message));
     }
 
 
@@ -168,28 +154,33 @@ public class CommandTransformer {
      * @return Optional of bytebuffer, containing ChatOs private connexion request bytebuffer
      * returns an Optional.empty if the buffer size is > 1024
      */
-    private Optional<ByteBuffer> connexionRqtToBB(String[] tokens){
+    private Optional<Trame> connexionRqtTrame(String[] tokens){
         if(tokens.length != 2){
             connexionRequestUsage();
             return Optional.empty();
         }
 
-        byte opCode = OpCode.PRIVATE_CONNECTION_REQUEST.value();
         String adresseeLogin = tokens[1];
-        ByteBuffer encodedLogin = charset.encode(adresseeLogin);
-        int loginSize = encodedLogin.remaining();
+        return Optional.of(new PrivateConnectionRequest(adresseeLogin));
+    }
 
-        int packetSize = (Byte.BYTES + Integer.BYTES + loginSize);
-        if(packetSize > BUFFER_SIZE){
-            System.out.println("Login is too long");
+    private Optional<Trame> connexionAcceptTrame(String[] tokens){
+        if(tokens.length != 2){
+            acceptUsage();
             return Optional.empty();
         }
 
-        logger.info("Correct connexion request packet to: " + adresseeLogin);
-        ByteBuffer requestBuffer = ByteBuffer.allocate(BUFFER_SIZE)
-                .put(opCode)
-                .putInt(loginSize).put(encodedLogin)
-                .flip();
-        return Optional.of(requestBuffer);
+        String adresseeLogin = tokens[1];
+        return Optional.of(new PrivateConnectionResponse(adresseeLogin, true));
+    }
+
+    private Optional<Trame> connexionDeclineTrame(String[] tokens){
+        if(tokens.length != 2){
+            acceptUsage();
+            return Optional.empty();
+        }
+
+        String adresseeLogin = tokens[1];
+        return Optional.of(new PrivateConnectionResponse(adresseeLogin, false));
     }
 }

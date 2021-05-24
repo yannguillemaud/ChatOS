@@ -17,12 +17,7 @@ public class ClientGlobalMessage implements Trame {
         this.value = value;
     }
 
-    /**
-     * Transforms a GlobalMessage instance into an Optional ByteBuffer if the given size is enough to store it
-     * Otherwise returns an empty optional
-     * @param maxBufferSize the maximum size of the message
-     * @return An optional containing the message if it has enough space, otherwise an empty one
-     */
+    @Override
     public Optional<ByteBuffer> toByteBuffer(int maxBufferSize) {
         ByteBuffer encodedValue = UTF8.encode(value);
         int valueSize = encodedValue.remaining();

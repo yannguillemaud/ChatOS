@@ -2,7 +2,6 @@ package fr.umlv.chatos.server;
 
 import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.clientglobal.ClientGlobalMessage;
-import fr.umlv.chatos.readers.errorcode.ErrorCode;
 import fr.umlv.chatos.readers.privateconnection.acceptationrequest.PrivateConnectionAcceptationRequest;
 import fr.umlv.chatos.readers.privateconnection.request.PrivateConnectionRequest;
 import fr.umlv.chatos.readers.privateconnection.response.PrivateConnectionResponse;
@@ -83,6 +82,9 @@ public class ChatOSServer {
                             } else if (personalMessage.getLogin().length() == 0) {
                                 queueMessage(EMPTY_PSEUDO);
                                 break;
+                            } else if (!server.isRegistered(personalMessage.getLogin())){
+                                queueMessage(NOT_LINKED);
+                                break;
                             }
 
                             var personalMessageToSend = new PersonalMessage(login, personalMessage.getValue());
@@ -90,10 +92,9 @@ public class ChatOSServer {
 
                             if (personalMessageToSendByteBuffer.isEmpty()) {
                                 queueMessage(TOO_LONG_MESSAGE);
-                            } else if (server.trySendTrameTo(personalMessage.getLogin(), personalMessageToSend)) {
-                                queueMessage(new SuccessMessage());
                             } else {
-                                queueMessage(NOT_LINKED);
+                                server.trySendTrameTo(personalMessage.getLogin(), personalMessageToSend); //returns true
+                                queueMessage(new SuccessMessage());
                             }
 
                         } else if (trame instanceof ClientGlobalMessage clientGlobalMessage) {
@@ -121,6 +122,9 @@ public class ChatOSServer {
                                 break;
                             } else if (privateConnectionRequest.getLogin().length() == 0) {
                                 queueMessage(EMPTY_PSEUDO);
+                                break;
+                            } else if (!server.isRegistered(privateConnectionRequest.getLogin())){
+                                queueMessage(NOT_LINKED);
                                 break;
                             } else if (server.isPrivateConnectionDemandInitiated(login, privateConnectionRequest.getLogin())) {
                                 queueMessage(PRIVATE_CONNECTION_ALREADY_INITIATED);
@@ -160,7 +164,7 @@ public class ChatOSServer {
                                 if (!server.trySendTrameTo(privateConnectionResponse.getLogin(), CONNEXION_DECLINED)) {
                                     queueMessage(NOT_LINKED);
                                 }
-                                server.avortPrivateConnectionDemand(privateConnectionResponse.getLogin(), login);
+                                server.abortPrivateConnectionDemand(privateConnectionResponse.getLogin(), login);
                                 break;
                             }
 
@@ -385,13 +389,19 @@ public class ChatOSServer {
     }
 
     private boolean tryRegister(String login, Context context) {
-        logger.info("Checking availability for " + login);
+        logger.info("Trying registering for " + login);
         return contextMap.computeIfAbsent(login, key -> context).equals(context);
     }
 
     private void delete(String login) {
         logger.info("Delete user " + login);
         contextMap.remove(login);
+    }
+
+    private boolean isRegistered(String login){
+        logger.info("Checking availability of " + login);
+        var res = contextMap.get(login);
+        return res != null;
     }
 
     private boolean trySendTrameTo(String login, Trame trame) {
@@ -427,18 +437,20 @@ public class ChatOSServer {
 
 
     private boolean isPrivateConnectionDemandInitiated(String loginSender, String loginReceiver) {
-        return privateConnections.get(Map.entry(loginSender, loginReceiver)) == false;
+        Boolean connexion = privateConnections.get(Map.entry(loginSender, loginReceiver));
+        return connexion != null && !connexion;
     }
 
     private boolean isPrivateConnectionEstablished(String loginSender, String loginReceiver) {
-        return privateConnections.get(Map.entry(loginSender, loginReceiver)) == true;
+        Boolean connexion = privateConnections.get(Map.entry(loginSender, loginReceiver));
+        return connexion != null && connexion;
     }
 
     private void privateConnectionDemandInit(String loginSender, String loginReceiver) {
         privateConnections.put(Map.entry(loginSender, loginReceiver), false);
     }
 
-    private void avortPrivateConnectionDemand(String loginSender, String loginReceiver) {
+    private void abortPrivateConnectionDemand(String loginSender, String loginReceiver) {
         privateConnections.remove(Map.entry(loginSender, loginReceiver), false);
     }
 

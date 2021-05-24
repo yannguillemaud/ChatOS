@@ -3,6 +3,8 @@ package fr.umlv.chatos.client;
 import fr.umlv.chatos.client.command.CommandTransformer;
 import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.Reader.ProcessStatus;
+import fr.umlv.chatos.readers.initialization.InitializationMessage;
+import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
 import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessage;
 import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessageReader;
 import fr.umlv.chatos.readers.opcode.OpCode;
@@ -11,6 +13,15 @@ import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
 import fr.umlv.chatos.readers.errorcode.ErrorCode;
 import fr.umlv.chatos.readers.errorcode.ErrorCodeReader;
+import fr.umlv.chatos.readers.success.SuccessMessage;
+import fr.umlv.chatos.readers.trame.Trame;
+import fr.umlv.chatos.readers.trame.TrameReader;
+
+import fr.umlv.chatos.readers.privateconnection.acceptationrequest.*;
+import fr.umlv.chatos.readers.privateconnection.clientestablishment.*;
+import fr.umlv.chatos.readers.privateconnection.response.*;
+import fr.umlv.chatos.readers.privateconnection.request.*;
+import fr.umlv.chatos.readers.privateconnection.serverestablishment.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -34,12 +45,19 @@ public class ChatOSClient {
         final private SocketChannel sc;
         final private ByteBuffer bbin = ByteBuffer.allocate(BUFFER_SIZE);
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
-        final private Queue<ByteBuffer> queue = new LinkedList<>(); // buffers read-mode
+        final private Queue<Trame> queue = new LinkedList<>(); // buffers read-mode
 
+        final private Reader<Trame> trameReader = new TrameReader();
         final private Reader<OpCode> serverOpReader = new OpCodeReader();
+        final private Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
         final private Reader<ErrorCode> serverErrorReader = new ErrorCodeReader();
         final private Reader<ServerGlobalMessage> globalMessageReader = new ServerGlobalMessageReader();
         final private Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
+
+        final private Reader<PrivateConnectionAcceptationRequest> pcar = new PrivateConnectionAcceptationRequestReader();
+        final private Reader<PrivateConnectionClientEstablishment> pcce = new PrivateConnectionClientEstablishmentReader();
+        final private Reader<PrivateConnectionRequest> privateConnectionRequestReader = new PrivateConnectionRequestReader();
+        final private Reader<PrivateConnectionResponse> privateConnectionResponseReader = new PrivateConnectionResponseReader();
 
         private boolean closed = false;
 
@@ -55,106 +73,80 @@ public class ChatOSClient {
          * to process and after the call
          */
         private void processIn() {
-            ProcessStatus status = serverOpReader.process(bbin);
-            switch(status){
+            ProcessStatus status = trameReader.process(bbin);
+            switch (status) {
                 case DONE -> {
-                    OpCode opCode = serverOpReader.get();
-//                    logger.info("Received opcode: " + opCode);
-                    processOpCode(opCode);
-                    serverOpReader.reset();
-
+                    Trame trame = trameReader.get();
+                    processTrame(trame);
+                    trameReader.reset();
+                    return;
                 }
-                case REFILL -> {}
-                case ERROR ->  {
+                case REFILL -> {
+                }
+                case ERROR -> {
                     System.out.println("Error while processing input. Closing.");
                     silentlyClose();
+                    return;
                 }
             }
         }
 
-        private void processOpCode(OpCode opCode){
-//            System.out.println("Received: " + opCode);
-            switch (opCode) {
-                case SUCCESS -> System.out.println("Success");
-                case FAIL -> processFail();
-                case SERVER_GLOBAL_MESSAGE -> processGlobalMessage();
-                case PERSONAL_MESSAGE -> processPersonalMessage();
-                case PRIVATE_CONNECTION_SERVER_ESTABLISHMENT -> processSuccessConnexion();
+        private void processTrame(Trame trame){
+            System.out.println("Processing " + trame.toString());
+            if(trame instanceof SuccessMessage){
+                System.out.println("Sucess");
+            } else if (trame instanceof ErrorCode){
+                processReader(serverErrorReader);
+            } else if (trame instanceof InitializationMessage){
+                processReader(initializationMessageReader);
+            } else if (trame instanceof ServerGlobalMessage){
+                processReader(globalMessageReader);
+            } else if (trame instanceof PersonalMessage){
+                processReader(personalMessageReader);
+            } else if (trame instanceof PrivateConnectionAcceptationRequest){
+                processReader(pcar);
+            } else if (trame instanceof PrivateConnectionClientEstablishment){
+                processReader(pcce);
+            } else if (trame instanceof PrivateConnectionRequest){
+                processReader(privateConnectionRequestReader);
+            } else if (trame instanceof PrivateConnectionResponse){
+                processReader(privateConnectionResponseReader);
             }
         }
 
-        private void processFail(){
-            for(;;){
-                ProcessStatus status = serverErrorReader.process(bbin);
-                switch (status){
-                    case DONE:
-                        ErrorCode errorCode = serverErrorReader.get();
-                        System.out.println("Done. ErrorCode: " + errorCode);
-                        serverErrorReader.reset();
-                        return;
-                    case REFILL: continue;
-                    case ERROR:
-                        logger.severe("Error while receiving failure. Closing.");
-                        silentlyClose();
-                        return;
-                }
+        private void processReader(Reader<? extends Trame> reader){
+            ProcessStatus status = reader.process(bbin);
+            switch (status){
+                case DONE:
+                    Trame trame = reader.get();
+                    System.out.println(trame.toString());
+                    reader.reset();
+                    return;
+                case REFILL: return;
+                case ERROR:
+                    System.out.println(
+                            "Error while processing: " + reader + ". Closing");
+                    silentlyClose();
+                    return;
             }
-        }
-
-        private void processGlobalMessage(){
-            for(;;) {
-                ProcessStatus status = globalMessageReader.process(bbin);
-                switch (status) {
-                    case DONE:
-                        ServerGlobalMessage message = globalMessageReader.get();
-                        System.out.println(message);
-                        globalMessageReader.reset();
-                        return;
-                    case REFILL:
-                        continue;
-                    case ERROR: {
-                        logger.severe("Error while receiving global message. Closing.");
-                        silentlyClose();
-                        return;
-                    }
-                }
-            }
-        }
-
-        private void processPersonalMessage(){
-            for(;;) {
-                ProcessStatus status = personalMessageReader.process(bbin);
-                switch (status) {
-                    case DONE:
-                        PersonalMessage message = personalMessageReader.get();
-                        System.out.println(message);
-                        personalMessageReader.reset();
-                        return;
-                    case REFILL:
-                        continue;
-                    case ERROR: {
-                        logger.severe("Error while receiving personnal message. Closing.");
-                        silentlyClose();
-                        return;
-                    }
-                }
-            }
-        }
-
-        private void processSuccessConnexion(){
-            //TODO
         }
 
         /**
          * Add a message to the message queue, tries to fill bbOut and updateInterestOps
          *
-         * @param bb
+         * @param trame
          */
-        private void queueMessage(ByteBuffer bb) {
+        private void queueMessage(Trame trame) {
             synchronized (queue) {
-                queue.add(bb);
-                processOut();
-                updateInterestOps();
+                if(queue.size() == QUEUE_MAX_SIZE){
+                    System.out.println("Too many commands to process. Closing.");
+                    silentlyClose();
+                } else {
+                    queue.add(trame);
+                    System.out.println("Added: " + trame.toString());
+                    processOut();
+                    updateInterestOps();
+                }
             }
         }
 
@@ -163,11 +155,19 @@ public class ChatOSClient {
          */
         private void processOut() {
             while(!queue.isEmpty()){
-                var bb = queue.peek();
-                if(bb.remaining() <= bbout.remaining()){
+                var trame = queue.peek();
+                System.out.println("Peek: " + trame);
+                var optional = trame.toByteBuffer(BUFFER_SIZE);
+                if(optional.isPresent()) {
+                    var trameBuffer = optional.get();
+                    if (trameBuffer.remaining() <= bbout.remaining()) {
+                        queue.remove();
+                        bbout.put(trameBuffer);
+                    } else break;
+                } else {
+                    System.out.println("Trame too long");
                     queue.remove();
-                    bbout.put(bb);
-                } else break;
+                }
             }
         }
 
@@ -248,6 +248,7 @@ public class ChatOSClient {
     }
 
     static private int BUFFER_SIZE = 10_000;
+    static private int QUEUE_MAX_SIZE = 50;
     static private Logger logger = Logger.getLogger(ChatOSClient.class.getName());
 
 
@@ -302,12 +303,12 @@ public class ChatOSClient {
         synchronized (commandQueue){
             while(!commandQueue.isEmpty()){
                 String commandLine = commandQueue.poll();
-                Optional<ByteBuffer> optional = commandTransformer.asByteBuffer(commandLine);
+                Optional<Trame> optional = commandTransformer.asByteBuffer(commandLine);
                 if(optional.isEmpty()) {
                     System.out.println("Could not process: " + commandLine);
                     continue;
                 }
-                ByteBuffer commandBuffer = optional.get();
+                Trame commandBuffer = optional.get();
                 uniqueContext.queueMessage(commandBuffer);
             }
         }
