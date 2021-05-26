@@ -1,5 +1,8 @@
 package fr.umlv.chatos.readers.trame;
 
+import fr.umlv.chatos.server.ServerFrameVisitor;
+import fr.umlv.chatos.visitor.Visitor;
+
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
@@ -10,5 +13,6 @@ public interface Trame {
      * @param maxBufferSize the maximum size of the message
      * @return An optional containing the message if it has enough space, otherwise an empty one
      */
-    Optional<ByteBuffer> toByteBuffer(int maxBufferSize);
+    Optional<ByteBuffer> asByteBuffer(int maxBufferSize);
+    void accept(Visitor serverVisitor);
 }

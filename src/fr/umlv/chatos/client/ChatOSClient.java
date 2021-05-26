@@ -13,7 +13,6 @@ import fr.umlv.chatos.readers.personal.PersonalMessage;
 import fr.umlv.chatos.readers.personal.PersonalMessageReader;
 import fr.umlv.chatos.readers.errorcode.ErrorCode;
 import fr.umlv.chatos.readers.errorcode.ErrorCodeReader;
-import fr.umlv.chatos.readers.success.SuccessMessage;
 import fr.umlv.chatos.readers.trame.Trame;
 import fr.umlv.chatos.readers.trame.TrameReader;
 
@@ -21,7 +20,6 @@ import fr.umlv.chatos.readers.privateconnection.acceptationrequest.*;
 import fr.umlv.chatos.readers.privateconnection.clientestablishment.*;
 import fr.umlv.chatos.readers.privateconnection.response.*;
 import fr.umlv.chatos.readers.privateconnection.request.*;
-import fr.umlv.chatos.readers.privateconnection.serverestablishment.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -48,16 +46,7 @@ public class ChatOSClient {
         final private Queue<Trame> queue = new LinkedList<>(); // buffers read-mode
 
         final private Reader<Trame> trameReader = new TrameReader();
-        final private Reader<OpCode> serverOpReader = new OpCodeReader();
-        final private Reader<InitializationMessage> initializationMessageReader = new InitializationMessageReader();
-        final private Reader<ErrorCode> serverErrorReader = new ErrorCodeReader();
-        final private Reader<ServerGlobalMessage> globalMessageReader = new ServerGlobalMessageReader();
-        final private Reader<PersonalMessage> personalMessageReader = new PersonalMessageReader();
-
-        final private Reader<PrivateConnectionAcceptationRequest> pcar = new PrivateConnectionAcceptationRequestReader();
-        final private Reader<PrivateConnectionClientEstablishment> pcce = new PrivateConnectionClientEstablishmentReader();
-        final private Reader<PrivateConnectionRequest> privateConnectionRequestReader = new PrivateConnectionRequestReader();
-        final private Reader<PrivateConnectionResponse> privateConnectionResponseReader = new PrivateConnectionResponseReader();
+        final private ClientTrameVisitor visitor = new ClientTrameVisitor();
 
         private boolean closed = false;
 
@@ -77,7 +66,7 @@ public class ChatOSClient {
             switch (status) {
                 case DONE -> {
                     Trame trame = trameReader.get();
-                    processTrame(trame);
+                    treatFrame(trame);
                     trameReader.reset();
                     return;
                 }
@@ -91,44 +80,8 @@ public class ChatOSClient {
             }
         }
 
-        private void processTrame(Trame trame){
-            System.out.println("Processing " + trame.toString());
-            if(trame instanceof SuccessMessage){
-                System.out.println("Sucess");
-            } else if (trame instanceof ErrorCode){
-                processReader(serverErrorReader);
-            } else if (trame instanceof InitializationMessage){
-                processReader(initializationMessageReader);
-            } else if (trame instanceof ServerGlobalMessage){
-                processReader(globalMessageReader);
-            } else if (trame instanceof PersonalMessage){
-                processReader(personalMessageReader);
-            } else if (trame instanceof PrivateConnectionAcceptationRequest){
-                processReader(pcar);
-            } else if (trame instanceof PrivateConnectionClientEstablishment){
-                processReader(pcce);
-            } else if (trame instanceof PrivateConnectionRequest){
-                processReader(privateConnectionRequestReader);
-            } else if (trame instanceof PrivateConnectionResponse){
-                processReader(privateConnectionResponseReader);
-            }
-        }
-
-        private void processReader(Reader<? extends Trame> reader){
-            ProcessStatus status = reader.process(bbin);
-            switch (status){
-                case DONE:
-                    Trame trame = reader.get();
-                    System.out.println(trame.toString());
-                    reader.reset();
-                    return;
-                case REFILL: return;
-                case ERROR:
-                    System.out.println(
-                            "Error while processing: " + reader + ". Closing");
-                    silentlyClose();
-                    return;
-            }
+        private void treatFrame(Trame frame){
+            frame.accept(visitor);
         }
 
         /**
@@ -157,7 +110,7 @@ public class ChatOSClient {
             while(!queue.isEmpty()){
                 var trame = queue.peek();
                 System.out.println("Peek: " + trame);
-                var optional = trame.toByteBuffer(BUFFER_SIZE);
+                var optional = trame.asByteBuffer(BUFFER_SIZE);
                 if(optional.isPresent()) {
                     var trameBuffer = optional.get();
                     if (trameBuffer.remaining() <= bbout.remaining()) {
@@ -351,19 +304,6 @@ public class ChatOSClient {
         } catch(IOException ioe) {
             // lambda call in select requires to tunnel IOException
             throw new UncheckedIOException(ioe);
-        }
-    }
-
-    /**
-     * Safely close the channel associated to the given key
-     * @param key
-     */
-    private void silentlyClose(SelectionKey key) {
-        Channel sc = (Channel) key.channel();
-        try {
-            sc.close();
-        } catch (IOException e) {
-            // ignore exception
         }
     }
 

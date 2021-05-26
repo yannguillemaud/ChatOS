@@ -1,6 +1,7 @@
 package fr.umlv.chatos.readers.privateconnection.serverestablishment;
 
 import fr.umlv.chatos.readers.trame.Trame;
+import fr.umlv.chatos.visitor.Visitor;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -25,7 +26,7 @@ public class PrivateConnectionServerEstablishment implements Trame {
      * @param maxBufferSize the maximum size of the message
      * @return An optional containing the message if it has enough space, otherwise an empty one
      */
-    public Optional<ByteBuffer> toByteBuffer(int maxBufferSize) {
+    public Optional<ByteBuffer> asByteBuffer(int maxBufferSize) {
         ByteBuffer encodedLogin = UTF8.encode(login);
         ByteBuffer encodedToken = UTF8.encode(token);
         int loginSize = encodedLogin.remaining();
@@ -39,6 +40,11 @@ public class PrivateConnectionServerEstablishment implements Trame {
                     .flip()
             );
         } else return Optional.empty();
+    }
+
+    @Override
+    public void accept(Visitor serverVisitor) {
+
     }
 
     @Override

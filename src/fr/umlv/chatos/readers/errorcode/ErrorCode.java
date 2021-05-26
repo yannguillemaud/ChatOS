@@ -1,6 +1,7 @@
 package fr.umlv.chatos.readers.errorcode;
 
 import fr.umlv.chatos.readers.trame.Trame;
+import fr.umlv.chatos.visitor.Visitor;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
@@ -36,12 +37,19 @@ public enum ErrorCode implements Trame {
         return Optional.empty();
     }
 
+
+
     @Override
-    public Optional<ByteBuffer> toByteBuffer(int maxBufferSize) {
+    public Optional<ByteBuffer> asByteBuffer(int maxBufferSize) {
         return  Optional.of(ByteBuffer.allocate(Byte.BYTES * 2)
                 .put(FAIL.value())
                 .put(this.value())
                 .flip()
         );
+    }
+
+    @Override
+    public void accept(Visitor serverVisitor) {
+        serverVisitor.visit(this);
     }
 }

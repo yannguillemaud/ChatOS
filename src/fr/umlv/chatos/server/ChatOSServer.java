@@ -27,11 +27,11 @@ import static fr.umlv.chatos.readers.errorcode.ErrorCode.*;
 
 public class ChatOSServer {
 
-    static private class Context {
+    static class Context {
+        enum StateContext { PENDING, LOGGED }
 
         final private SelectionKey key;
         final private SocketChannel sc;
-        private static final int BUFFER_SIZE = 1024;
         final private ByteBuffer bbin = ByteBuffer.allocate(BUFFER_SIZE);
         final private ByteBuffer bbout = ByteBuffer.allocate(BUFFER_SIZE);
         final private Queue<Trame> queue = new LinkedList<>();
@@ -39,14 +39,17 @@ public class ChatOSServer {
         private boolean closed = false;
 
         private final TrameReader trameReader = new TrameReader();
-        private String login = null;
+        private final ServerFrameVisitor frameVisitor;
 
-        private boolean isInitialized = false;
+        String login = null;
+        boolean isInitialized = false;
+        StateContext state = StateContext.PENDING;
 
         private Context(ChatOSServer server, SelectionKey key){
             this.key = key;
             this.sc = (SocketChannel) key.channel();
             this.server = server;
+            this.frameVisitor = new ServerFrameVisitor(server, this);
         }
 
         private void processIn() {
@@ -57,138 +60,7 @@ public class ChatOSServer {
                         System.out.println("DONE");
                         Trame trame = trameReader.get();
                         trameReader.reset();
-
-                        if (trame instanceof InitializationMessage initializationMessage) {
-                            if (isInitialized) {
-                                queueMessage(CONNECTION_ALREADY_INITIALIZED);
-                                break;
-                            }
-
-                            String login = initializationMessage.getLogin();
-
-                            if (server.tryRegister(login, this)) {
-                                this.login = login;
-                                logger.info("Set " + login + " to " + sc);
-                                queueMessage(new SuccessMessage());
-                                isInitialized = true;
-                            } else {
-                                queueMessage(ALREADY_USED);
-                            }
-
-                        } else if (trame instanceof PersonalMessage personalMessage) {
-                            if (!isInitialized) {
-                                queueMessage(CONNECTION_NOT_INITIALIZED);
-                                break;
-                            } else if (personalMessage.getLogin().length() == 0) {
-                                queueMessage(EMPTY_PSEUDO);
-                                break;
-                            } else if (!server.isRegistered(personalMessage.getLogin())){
-                                queueMessage(NOT_LINKED);
-                                break;
-                            }
-
-                            var personalMessageToSend = new PersonalMessage(login, personalMessage.getValue());
-                            var personalMessageToSendByteBuffer = personalMessageToSend.toByteBuffer(BUFFER_SIZE);
-
-                            if (personalMessageToSendByteBuffer.isEmpty()) {
-                                queueMessage(TOO_LONG_MESSAGE);
-                            } else {
-                                server.trySendTrameTo(personalMessage.getLogin(), personalMessageToSend); //returns true
-                                queueMessage(new SuccessMessage());
-                            }
-
-                        } else if (trame instanceof ClientGlobalMessage clientGlobalMessage) {
-                            if (!isInitialized) {
-                                queueMessage(CONNECTION_NOT_INITIALIZED);
-                                break;
-                            }
-
-                            var globalMessageToSend = new ServerGlobalMessage(login, clientGlobalMessage.getValue());
-                            var globalMessageToSendByteBuffer = globalMessageToSend.toByteBuffer(BUFFER_SIZE);
-
-                            Trame serverResponse;
-                            if (globalMessageToSendByteBuffer.isEmpty()) {
-                                serverResponse = TOO_LONG_MESSAGE;
-                            } else {
-                                server.broadcast(globalMessageToSend);
-                                serverResponse = new SuccessMessage();
-                            }
-
-                            queueMessage(serverResponse);
-
-                        } else if (trame instanceof PrivateConnectionRequest privateConnectionRequest) {
-                            if (!isInitialized) {
-                                queueMessage(CONNECTION_NOT_INITIALIZED);
-                                break;
-                            } else if (privateConnectionRequest.getLogin().length() == 0) {
-                                queueMessage(EMPTY_PSEUDO);
-                                break;
-                            } else if (!server.isRegistered(privateConnectionRequest.getLogin())){
-                                queueMessage(NOT_LINKED);
-                                break;
-                            } else if (server.isPrivateConnectionDemandInitiated(login, privateConnectionRequest.getLogin())) {
-                                queueMessage(PRIVATE_CONNECTION_ALREADY_INITIATED);
-                                break;
-                            } else if (server.isPrivateConnectionEstablished(login, privateConnectionRequest.getLogin())) {
-                                queueMessage(PRIVATE_CONNECTION_ALREADY_ESTABLISHED);
-                                break;
-                            }
-
-
-                            var privateConnectionAcceptationRequest = new PrivateConnectionAcceptationRequest(privateConnectionRequest.getLogin());
-                            var privateConnectionAcceptationRequestByteBuffer = privateConnectionAcceptationRequest.toByteBuffer(BUFFER_SIZE);
-
-                            if (privateConnectionAcceptationRequestByteBuffer.isEmpty()) {
-                                queueMessage(TOO_LONG_MESSAGE); // Pas sur de ce code d'erreur
-                            } else if (server.trySendTrameTo(privateConnectionRequest.getLogin(), privateConnectionAcceptationRequest)) {
-                                server.privateConnectionDemandInit(login, privateConnectionRequest.getLogin());
-                                queueMessage(new SuccessMessage());
-                            } else {
-                                queueMessage(NOT_LINKED);
-                            }
-
-                        } else if (trame instanceof PrivateConnectionResponse privateConnectionResponse) {
-                            if (!isInitialized) {
-                                queueMessage(CONNECTION_NOT_INITIALIZED);
-                                break;
-                            } else if (privateConnectionResponse.getLogin().length() == 0) {
-                                queueMessage(EMPTY_PSEUDO);
-                                break;
-                            } else if (!server.isPrivateConnectionDemandInitiated(privateConnectionResponse.getLogin(), login)) {
-                                queueMessage(PRIVATE_CONNECTION_DEMAND_NOT_INITIATED);
-                                break;
-                            } else if (server.isPrivateConnectionEstablished(privateConnectionResponse.getLogin(), login)) {
-                                queueMessage(PRIVATE_CONNECTION_ALREADY_ESTABLISHED);
-                                break;
-                            } else if (!privateConnectionResponse.getAcceptPrivateConnection()) {
-                                if (!server.trySendTrameTo(privateConnectionResponse.getLogin(), CONNEXION_DECLINED)) {
-                                    queueMessage(NOT_LINKED);
-                                }
-                                server.abortPrivateConnectionDemand(privateConnectionResponse.getLogin(), login);
-                                break;
-                            }
-
-                            var token = server.generateNewToken();
-                            var privateConnectionEstablishmentA = new PrivateConnectionServerEstablishment(login, token);
-                            var privateConnectionEstablishmentB = new PrivateConnectionServerEstablishment(privateConnectionResponse.getLogin(), token);
-                            var privateConnectionEstablishmentAByteBuffer = privateConnectionEstablishmentA.toByteBuffer(BUFFER_SIZE);
-                            var privateConnectionEstablishmentBByteBuffer = privateConnectionEstablishmentB.toByteBuffer(BUFFER_SIZE);
-
-                            if (
-                                    privateConnectionEstablishmentAByteBuffer.isEmpty() ||
-                                    privateConnectionEstablishmentBByteBuffer.isEmpty()
-                            ) {
-                                queueMessage(UNDEFINED); // Je sais pas trop quoi mettre là
-                            } else if (
-                                    server.trySendTrameTo(login, privateConnectionEstablishmentB) &&
-                                    server.trySendTrameTo(privateConnectionResponse.getLogin(), privateConnectionEstablishmentA)
-                            ) {
-                                server.initPrivateConnection(privateConnectionResponse.getLogin(), login, token);
-                            } else {
-                                // Ca veut qu'un des deux gars existe pas ca n'as aucun sens
-                            }
-
-                        }
+                        treatFrame(trame);
                     }
                     case REFILL -> {
                         System.out.println("REFILL");
@@ -201,6 +73,10 @@ public class ChatOSServer {
                     }
                 }
             }
+        }
+
+        private void treatFrame(Trame frame){
+            frame.accept(frameVisitor);
         }
 
         /**
@@ -216,7 +92,7 @@ public class ChatOSServer {
          *
          * @param trame
          */
-        private void queueMessage(Trame trame) {
+        void queueMessage(Trame trame) {
             queue.add(trame);
 
             processOut();
@@ -229,7 +105,7 @@ public class ChatOSServer {
         private void processOut() {
             while (!queue.isEmpty() && bbout.remaining() > Integer.BYTES){
                 var sendable = queue.peek();
-                var sendableByteBuffer = sendable.toByteBuffer(BUFFER_SIZE);
+                var sendableByteBuffer = sendable.asByteBuffer(BUFFER_SIZE);
 
 
 
@@ -318,6 +194,7 @@ public class ChatOSServer {
     }
 
     static private final Logger logger = Logger.getLogger(ChatOSServer.class.getName());
+    static final int BUFFER_SIZE = 1024;
 
     private final HashMap<String, Context> contextMap = new HashMap<>();
     private final HashMap<Map.Entry<String, String>, Boolean> privateConnections = new HashMap<>();
@@ -388,23 +265,18 @@ public class ChatOSServer {
         }
     }
 
-    private boolean tryRegister(String login, Context context) {
-        logger.info("Trying registering for " + login);
-        return contextMap.computeIfAbsent(login, key -> context).equals(context);
-    }
-
     private void delete(String login) {
         logger.info("Delete user " + login);
         contextMap.remove(login);
     }
 
-    private boolean isRegistered(String login){
+    boolean isRegistered(String login){
         logger.info("Checking availability of " + login);
         var res = contextMap.get(login);
         return res != null;
     }
 
-    private boolean trySendTrameTo(String login, Trame trame) {
+    boolean trySendTrameTo(String login, Trame trame) {
         var context = contextMap.get(login);
         if (context == null) {
             return false;
@@ -419,7 +291,7 @@ public class ChatOSServer {
      *
      * @param serverGlobalMessage
      */
-    private void broadcast(ServerGlobalMessage serverGlobalMessage) {
+    void broadcast(ServerGlobalMessage serverGlobalMessage) {
         selector.keys().forEach(selectionKey -> {
             if (!selectionKey.channel().equals(serverSocketChannel)) {
                 var context = (Context)selectionKey.attachment();
@@ -431,31 +303,35 @@ public class ChatOSServer {
         });
     }
 
-    private String generateNewToken() {
+    String generateNewToken() {
         return TokenGenerator.token();
     }
 
-
-    private boolean isPrivateConnectionDemandInitiated(String loginSender, String loginReceiver) {
+    boolean isPrivateConnectionDemandInitiated(String loginSender, String loginReceiver) {
         Boolean connexion = privateConnections.get(Map.entry(loginSender, loginReceiver));
         return connexion != null && !connexion;
     }
 
-    private boolean isPrivateConnectionEstablished(String loginSender, String loginReceiver) {
+    boolean isPrivateConnectionEstablished(String loginSender, String loginReceiver) {
         Boolean connexion = privateConnections.get(Map.entry(loginSender, loginReceiver));
         return connexion != null && connexion;
     }
 
-    private void privateConnectionDemandInit(String loginSender, String loginReceiver) {
+    void privateConnectionDemandInit(String loginSender, String loginReceiver) {
         privateConnections.put(Map.entry(loginSender, loginReceiver), false);
     }
 
-    private void abortPrivateConnectionDemand(String loginSender, String loginReceiver) {
+    void abortPrivateConnectionDemand(String loginSender, String loginReceiver) {
         privateConnections.remove(Map.entry(loginSender, loginReceiver), false);
     }
 
-    private void initPrivateConnection(String loginSender, String loginReceiver, String token) {
+    void initPrivateConnection(String loginSender, String loginReceiver, String token) {
         privateConnections.computeIfPresent(Map.entry(loginSender, loginReceiver), (k, v) -> true);
+    }
+
+    boolean tryRegister(String login, Context context) {
+        logger.info("Trying registering for " + login);
+        return contextMap.computeIfAbsent(login, key -> context).equals(context);
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {

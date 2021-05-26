@@ -1,6 +1,7 @@
 package fr.umlv.chatos.readers.clientglobal;
 
 import fr.umlv.chatos.readers.trame.Trame;
+import fr.umlv.chatos.visitor.Visitor;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -18,7 +19,7 @@ public class ClientGlobalMessage implements Trame {
     }
 
     @Override
-    public Optional<ByteBuffer> toByteBuffer(int maxBufferSize) {
+    public Optional<ByteBuffer> asByteBuffer(int maxBufferSize) {
         ByteBuffer encodedValue = UTF8.encode(value);
         int valueSize = encodedValue.remaining();
         int totalSize = Byte.BYTES + Integer.BYTES + valueSize;
@@ -30,6 +31,11 @@ public class ClientGlobalMessage implements Trame {
             );
         }
         return Optional.empty();
+    }
+
+    @Override
+    public void accept(Visitor serverVisitor) {
+        serverVisitor.visit(this);
     }
 
     @Override
