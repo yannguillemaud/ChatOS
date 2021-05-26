@@ -15,7 +15,7 @@ import fr.umlv.chatos.visitor.Visitor;
 public class ClientTrameVisitor implements Visitor {
     @Override
     public void visit(SuccessMessage successMessage) {
-        System.out.println(successMessage);
+        System.out.println("Connexion successful");
     }
 
     @Override
@@ -25,7 +25,7 @@ public class ClientTrameVisitor implements Visitor {
 
     @Override
     public void visit(InitializationMessage initializationMessage) {
-        System.out.println(initializationMessage);
+
     }
 
     @Override

@@ -96,7 +96,6 @@ public class ChatOSClient {
                     silentlyClose();
                 } else {
                     queue.add(trame);
-                    System.out.println("Added: " + trame.toString());
                     processOut();
                     updateInterestOps();
                 }
@@ -109,7 +108,6 @@ public class ChatOSClient {
         private void processOut() {
             while(!queue.isEmpty()){
                 var trame = queue.peek();
-                System.out.println("Peek: " + trame);
                 var optional = trame.asByteBuffer(BUFFER_SIZE);
                 if(optional.isPresent()) {
                     var trameBuffer = optional.get();

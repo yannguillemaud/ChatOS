@@ -82,7 +82,6 @@ public class TrameReader implements Reader<Trame> {
                 return opReaderStatus;
             }
             opCode = opReader.get();
-            System.out.println("Received: " + opCode);
             opReader.reset();
         }
 

@@ -29,7 +29,7 @@ public class SuccessMessage implements Trame {
 
     @Override
     public void accept(Visitor serverVisitor) {
-
+        serverVisitor.visit(this);
     }
 
     @Override
