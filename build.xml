@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+    <project name="ChatOS" default="jar" basedir=".">
+        <property name="repSources" value="src/main/java"></property>
+        <property name="repClasses" value="out/production/ChatOS"></property>
+        <property name="repJars" value="${basedir}/jars"></property>
+        <property name="Server.Main" value="fr.umlv.chatos.server.ChatOSServer"></property>
+        <property name="Client.Main" value="fr.umlv.chatos.client.ChatOSClient"></property>
+        
+
+        <target name="clean">
+            <echo message="Cleaning" />
+            <delete dir="out" />
+            <mkdir dir="out" />
+            <mkdir dir="jars" />
+        </target>
+
+        <target name="compile" depends="clean">
+            <echo message="Project compilation" />
+            <javac srcdir="src" destdir="out" />
+        </target>
+
+        <target name="javadoc" depends="compile">
+            <echo message="Javadoc compilation" />
+            <javadoc sourcepath="src" destdir="${basedir}/docs/doc" />
+        </target>
+
+        <target name="jar" depends="javadoc">
+            <jar destfile="${repJars}/ChatOSServer.jar">
+                <fileset dir="out" />
+                <manifest>
+                    <attribute name="Main-Class" value="${Server.Main}" />
+                </manifest>
+            </jar>
+            <jar destfile="${repJars}/ChatOSClient.jar">
+                <fileset dir="out" />
+                <manifest>
+                    <attribute name="Main-Class" value="${Client.Main}" />
+                </manifest>
+            </jar>
+        </target>
+    </project>
