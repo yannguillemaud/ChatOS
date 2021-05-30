@@ -3,29 +3,13 @@ package fr.umlv.chatos.client;
 import fr.umlv.chatos.client.command.CommandTransformer;
 import fr.umlv.chatos.readers.Reader;
 import fr.umlv.chatos.readers.Reader.ProcessStatus;
-import fr.umlv.chatos.readers.initialization.InitializationMessage;
-import fr.umlv.chatos.readers.initialization.InitializationMessageReader;
-import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessage;
-import fr.umlv.chatos.readers.serverglobal.ServerGlobalMessageReader;
-import fr.umlv.chatos.readers.opcode.OpCode;
-import fr.umlv.chatos.readers.opcode.OpCodeReader;
-import fr.umlv.chatos.readers.personal.PersonalMessage;
-import fr.umlv.chatos.readers.personal.PersonalMessageReader;
-import fr.umlv.chatos.readers.errorcode.ErrorCode;
-import fr.umlv.chatos.readers.errorcode.ErrorCodeReader;
 import fr.umlv.chatos.readers.trame.Trame;
 import fr.umlv.chatos.readers.trame.TrameReader;
-
-import fr.umlv.chatos.readers.privateconnection.acceptationrequest.*;
-import fr.umlv.chatos.readers.privateconnection.clientestablishment.*;
-import fr.umlv.chatos.readers.privateconnection.response.*;
-import fr.umlv.chatos.readers.privateconnection.request.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -256,7 +240,6 @@ public class ChatOSClient {
                 String commandLine = commandQueue.poll();
                 Optional<Trame> optional = commandTransformer.asByteBuffer(commandLine);
                 if(optional.isEmpty()) {
-                    System.out.println("Could not process: " + commandLine);
                     continue;
                 }
                 Trame commandBuffer = optional.get();

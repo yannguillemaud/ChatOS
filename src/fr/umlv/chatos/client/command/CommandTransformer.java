@@ -25,29 +25,23 @@ import static java.util.Objects.requireNonNull;
  * Therefore each client whill have to create its own CommandTransformer according to it's defined charset
  */
 public class CommandTransformer {
-    private static final int BUFFER_SIZE = 1024;
-    private static final Charset charset = StandardCharsets.UTF_8;
-    private static final Logger logger = Logger.getLogger(CommandTransformer.class.getName());
-
-    private String linkedLogin;
-
     private static void initMessageUsage(){
-        System.out.println("Server connexion request: login login");
+        System.out.println("Server connexion request: /login login");
     }
 
     private static void globalMessageUsage(){
-        System.out.println("Global message: global message");
+        System.out.println("Global message: /global message");
     }
 
     private static void privateMessageUsage(){
-        System.out.println("Private message: private to_pseudo message");
+        System.out.println("Private message: /private to_pseudo message");
     }
 
-    private static void connexionRequestUsage(){ System.out.println("Private connexion request: PRIVATE to_pseudo"); }
+    private static void connexionRequestUsage(){ System.out.println("Private connexion request: /connexion to_pseudo"); }
 
-    private static void acceptUsage() { System.out.println("Accept private connexion: accept to_pseudo"); }
+    private static void acceptUsage() { System.out.println("Accept private connexion: /accept to_pseudo"); }
 
-    private static void declineUsage() { System.out.println("Decline private connexion: decline to_pseudo"); }
+    private static void declineUsage() { System.out.println("Decline private connexion: /decline to_pseudo"); }
 
     private static void usages(){
         System.out.println("Commands list: ");
@@ -69,7 +63,6 @@ public class CommandTransformer {
     public Optional<Trame> asByteBuffer(String commandString){
         requireNonNull(commandString);
         String[] tokens = commandString.split(" ");
-        if(tokens.length < 2) return Optional.empty();
         return transformCommand(tokens);
     }
 
@@ -81,12 +74,16 @@ public class CommandTransformer {
     private Optional<Trame> transformCommand(String[] tokens){
         String command = tokens[0];
         switch(command){
-            case "login" : return initTrame(tokens);
-            case "global" : return globalTrame(tokens);
-            case "private" : return privateMessageTrame(tokens);
-            case "connexion" : return connexionRqtTrame(tokens);
-            case "accept": return connexionAcceptTrame(tokens);
-            case "decline": return connexionDeclineTrame(tokens);
+            case "/login" : return initTrame(tokens);
+            case "/global" : return globalTrame(tokens);
+            case "/private" : return privateMessageTrame(tokens);
+            case "/connexion" : return connexionRqtTrame(tokens);
+            case "/accept": return connexionAcceptTrame(tokens);
+            case "/decline": return connexionDeclineTrame(tokens);
+            case "/help": {
+                usages();
+                return Optional.empty();
+            }
             default : {
                 System.out.println("Unknown command");
                 return Optional.empty();
